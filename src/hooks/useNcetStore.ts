@@ -20,27 +20,47 @@ import {
 } from '../firebase';
 import {
   CONTACT_THREADS,
+  DEFAULT_COMMUNITY_ALIAS,
   DEFAULT_STUDENT_PROFILE,
+  SEED_ANNOUNCEMENTS,
   SEED_APPLICATIONS,
+  SEED_ATTENDANCE_RECORDS,
+  SEED_COMMUNITY_POLLS,
+  SEED_COMMUNITY_POSTS,
+  SEED_COMMUNITY_REPORTS,
   SEED_EVENTS,
+  SEED_LEARNING_GROUPS,
   SEED_NOTIFICATIONS,
   SEED_OPPORTUNITIES,
+  SEED_PEER_MATCHES,
+  SEED_RECOGNITION_BADGES,
 } from '../data/seedData';
 import type {
   ApplicationRecord,
   ApplicationStatus,
+  AttendanceRecord,
+  CampusAnnouncement,
+  CommunityAlias,
+  CommunityComment,
+  CommunityPoll,
+  CommunityPost,
+  CommunityReport,
+  CommunityTopic,
   DirectMessage,
   EncryptedVaultDoc,
   EngagementEvent,
+  LearningGroup,
   NotificationItem,
   Opportunity,
+  PeerMatch,
   StudentProfile,
+  StudentRecognitionBadge,
   UserRole,
 } from '../types/ncet';
 import { decryptPayload, encryptPayload } from '../utils/crypto';
 import { rankRecommendations } from '../utils/recommender';
 
-const CACHE_KEY = 'ncet_connect_offline_state_v1';
+const CACHE_KEY = 'ncet_connect_offline_state_v2';
 
 interface CachedState {
   profile: StudentProfile;
@@ -50,6 +70,15 @@ interface CachedState {
   notifications: NotificationItem[];
   messages: DirectMessage[];
   vaultDocs: EncryptedVaultDoc[];
+  alias?: CommunityAlias;
+  posts?: CommunityPost[];
+  polls?: CommunityPoll[];
+  peerMatches?: PeerMatch[];
+  groups?: LearningGroup[];
+  announcements?: CampusAnnouncement[];
+  badges?: StudentRecognitionBadge[];
+  attendanceRecords?: AttendanceRecord[];
+  reports?: CommunityReport[];
 }
 
 function loadCachedState(): CachedState {
@@ -62,6 +91,15 @@ function loadCachedState(): CachedState {
       notifications: SEED_NOTIFICATIONS,
       messages: [],
       vaultDocs: [],
+      alias: DEFAULT_COMMUNITY_ALIAS,
+      posts: SEED_COMMUNITY_POSTS,
+      polls: SEED_COMMUNITY_POLLS,
+      peerMatches: SEED_PEER_MATCHES,
+      groups: SEED_LEARNING_GROUPS,
+      announcements: SEED_ANNOUNCEMENTS,
+      badges: SEED_RECOGNITION_BADGES,
+      attendanceRecords: SEED_ATTENDANCE_RECORDS,
+      reports: SEED_COMMUNITY_REPORTS,
     };
   }
   try {
@@ -79,6 +117,15 @@ function loadCachedState(): CachedState {
         notifications: parsed.notifications ?? SEED_NOTIFICATIONS,
         messages: parsed.messages ?? [],
         vaultDocs: parsed.vaultDocs ?? [],
+        alias: parsed.alias ?? DEFAULT_COMMUNITY_ALIAS,
+        posts: parsed.posts && parsed.posts.length > 0 ? parsed.posts : SEED_COMMUNITY_POSTS,
+        polls: parsed.polls && parsed.polls.length > 0 ? parsed.polls : SEED_COMMUNITY_POLLS,
+        peerMatches: parsed.peerMatches && parsed.peerMatches.length > 0 ? parsed.peerMatches : SEED_PEER_MATCHES,
+        groups: parsed.groups && parsed.groups.length > 0 ? parsed.groups : SEED_LEARNING_GROUPS,
+        announcements: parsed.announcements && parsed.announcements.length > 0 ? parsed.announcements : SEED_ANNOUNCEMENTS,
+        badges: parsed.badges && parsed.badges.length > 0 ? parsed.badges : SEED_RECOGNITION_BADGES,
+        attendanceRecords: parsed.attendanceRecords && parsed.attendanceRecords.length > 0 ? parsed.attendanceRecords : SEED_ATTENDANCE_RECORDS,
+        reports: parsed.reports && parsed.reports.length > 0 ? parsed.reports : SEED_COMMUNITY_REPORTS,
       };
     }
   } catch {
@@ -92,6 +139,15 @@ function loadCachedState(): CachedState {
     notifications: SEED_NOTIFICATIONS,
     messages: [],
     vaultDocs: [],
+    alias: DEFAULT_COMMUNITY_ALIAS,
+    posts: SEED_COMMUNITY_POSTS,
+    polls: SEED_COMMUNITY_POLLS,
+    peerMatches: SEED_PEER_MATCHES,
+    groups: SEED_LEARNING_GROUPS,
+    announcements: SEED_ANNOUNCEMENTS,
+    badges: SEED_RECOGNITION_BADGES,
+    attendanceRecords: SEED_ATTENDANCE_RECORDS,
+    reports: SEED_COMMUNITY_REPORTS,
   };
 }
 
@@ -109,6 +165,15 @@ export function useNcetStore() {
   const [vaultDocs, setVaultDocs] = useState<EncryptedVaultDoc[]>(initial.vaultDocs);
   const [authError, setAuthError] = useState<string | null>(null);
   const [biometricUnlocked, setBiometricUnlocked] = useState(false);
+  const [alias, setAlias] = useState<CommunityAlias>(initial.alias ?? DEFAULT_COMMUNITY_ALIAS);
+  const [posts, setPosts] = useState<CommunityPost[]>(initial.posts ?? SEED_COMMUNITY_POSTS);
+  const [polls, setPolls] = useState<CommunityPoll[]>(initial.polls ?? SEED_COMMUNITY_POLLS);
+  const [peerMatches, setPeerMatches] = useState<PeerMatch[]>(initial.peerMatches ?? SEED_PEER_MATCHES);
+  const [groups, setGroups] = useState<LearningGroup[]>(initial.groups ?? SEED_LEARNING_GROUPS);
+  const [announcements, setAnnouncements] = useState<CampusAnnouncement[]>(initial.announcements ?? SEED_ANNOUNCEMENTS);
+  const [badges, setBadges] = useState<StudentRecognitionBadge[]>(initial.badges ?? SEED_RECOGNITION_BADGES);
+  const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(initial.attendanceRecords ?? SEED_ATTENDANCE_RECORDS);
+  const [reports, setReports] = useState<CommunityReport[]>(initial.reports ?? SEED_COMMUNITY_REPORTS);
 
   // Persist offline cache for PWA / multi-device continuity
   useEffect(() => {
@@ -123,12 +188,38 @@ export function useNcetStore() {
           notifications,
           messages,
           vaultDocs,
+          alias,
+          posts,
+          polls,
+          peerMatches,
+          groups,
+          announcements,
+          badges,
+          attendanceRecords,
+          reports,
         })
       );
     } catch {
       // Ignore storage quota errors
     }
-  }, [profile, opportunities, applications, events, notifications, messages, vaultDocs]);
+  }, [
+    profile,
+    opportunities,
+    applications,
+    events,
+    notifications,
+    messages,
+    vaultDocs,
+    alias,
+    posts,
+    polls,
+    peerMatches,
+    groups,
+    announcements,
+    badges,
+    attendanceRecords,
+    reports,
+  ]);
 
   // Seed encrypted starter message & vault doc once if empty
   useEffect(() => {
@@ -703,6 +794,410 @@ export function useNcetStore() {
     [user]
   );
 
+  // Anonymous Connect: Alias regeneration
+  const regenerateAlias = useCallback(() => {
+    const prefixes = [
+      'Quantum',
+      'Cyber',
+      'Silicon',
+      'Neon',
+      'Pixel',
+      'Binary',
+      'Hyperion',
+      'Aero',
+      'Vector',
+      'Cosmic',
+      'Apex',
+      'Neural',
+    ];
+    const animals = [
+      'Badger',
+      'Falcon',
+      'Sphinx',
+      'Otter',
+      'Eagle',
+      'Phoenix',
+      'Lynx',
+      'Fox',
+      'Wolf',
+      'Hawk',
+      'Panther',
+      'Tiger',
+    ];
+    const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    const animal = animals[Math.floor(Math.random() * animals.length)];
+    const tag = Math.floor(100 + Math.random() * 900);
+    const newName = `${prefix} ${animal} #${tag}`;
+    const newAlias: CommunityAlias = {
+      id: `alias-${Date.now()}`,
+      userId: profile.uid,
+      aliasName: newName,
+      avatarSeed: `${prefix.toLowerCase()}-${animal.toLowerCase()}`,
+      reputationPoints: alias.reputationPoints,
+      createdAt: new Date().toISOString(),
+    };
+    setAlias(newAlias);
+    setProfile((prev) => ({ ...prev, anonymousAliasId: newAlias.id }));
+    addNotification(
+      'Pseudonymous Identity Updated',
+      `Your new community alias is ${newName}. Your institutional @ncet.ac.in identity is protected.`,
+      'in_app'
+    );
+    return newAlias;
+  }, [addNotification, alias.reputationPoints, profile.uid]);
+
+  // Anonymous Connect: Posts & Interactions
+  const createCommunityPost = useCallback(
+    (topic: CommunityTopic, title: string, content: string, tags: string[]) => {
+      const newPost: CommunityPost = {
+        id: `cpost-${Date.now()}`,
+        authorAliasId: alias.id,
+        authorAliasName: alias.aliasName,
+        topic,
+        title,
+        content,
+        tags,
+        upvotes: 1,
+        hasUpvoted: true,
+        commentCount: 0,
+        comments: [],
+        createdAt: new Date().toISOString(),
+      };
+      setPosts((prev) => [newPost, ...prev]);
+      setAlias((prev) => ({ ...prev, reputationPoints: prev.reputationPoints + 5 }));
+      addNotification(
+        'Community Topic Published',
+        `Your post "${title}" is live in #${topic} under your alias ${alias.aliasName}.`,
+        'in_app'
+      );
+      return newPost;
+    },
+    [addNotification, alias]
+  );
+
+  const upvoteCommunityPost = useCallback((postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== postId) return p;
+        const already = p.hasUpvoted ?? false;
+        return {
+          ...p,
+          hasUpvoted: !already,
+          upvotes: already ? p.upvotes - 1 : p.upvotes + 1,
+        };
+      })
+    );
+  }, []);
+
+  const addCommunityComment = useCallback(
+    (postId: string, content: string) => {
+      const comment: CommunityComment = {
+        id: `ccom-${Date.now()}`,
+        postId,
+        authorAliasName: alias.aliasName,
+        content,
+        createdAt: new Date().toISOString(),
+      };
+      setPosts((prev) =>
+        prev.map((p) => {
+          if (p.id !== postId) return p;
+          return {
+            ...p,
+            commentCount: p.commentCount + 1,
+            comments: [...(p.comments || []), comment],
+          };
+        })
+      );
+      setAlias((prev) => ({ ...prev, reputationPoints: prev.reputationPoints + 2 }));
+      return comment;
+    },
+    [alias.aliasName]
+  );
+
+  // Anonymous Connect: Polls
+  const votePoll = useCallback((pollId: string, optionId: string) => {
+    setPolls((prev) =>
+      prev.map((poll) => {
+        if (poll.id !== pollId) return poll;
+        if (poll.userVotedOptionId === optionId) return poll;
+        const prevVote = poll.userVotedOptionId;
+        const updatedOptions = poll.options.map((opt) => {
+          if (opt.id === optionId) return { ...opt, votes: opt.votes + 1 };
+          if (opt.id === prevVote) return { ...opt, votes: Math.max(0, opt.votes - 1) };
+          return opt;
+        });
+        const total = updatedOptions.reduce((acc, curr) => acc + curr.votes, 0);
+        return {
+          ...poll,
+          options: updatedOptions,
+          totalVotes: total,
+          userVotedOptionId: optionId,
+        };
+      })
+    );
+  }, []);
+
+  const createPoll = useCallback(
+    (topic: string, question: string, optionTexts: string[]) => {
+      const newPoll: CommunityPoll = {
+        id: `cpoll-${Date.now()}`,
+        topic,
+        question,
+        authorAliasName: alias.aliasName,
+        options: optionTexts.map((text, idx) => ({
+          id: `opt-${idx + 1}-${Date.now()}`,
+          text,
+          votes: 1,
+        })),
+        totalVotes: optionTexts.length,
+        createdAt: new Date().toISOString(),
+      };
+      setPolls((prev) => [newPoll, ...prev]);
+      return newPoll;
+    },
+    [alias.aliasName]
+  );
+
+  // Anonymous Connect: Like-Minded Peer Matches & Mutual Consent
+  const requestPeerConnection = useCallback(
+    (matchId: string) => {
+      setPeerMatches((prev) =>
+        prev.map((m) => (m.id === matchId ? { ...m, status: 'pending_approval' } : m))
+      );
+      addNotification(
+        'Peer Connection Request Sent',
+        'Your pseudonymous request was delivered. Real identities remain protected until mutual consent.',
+        'in_app'
+      );
+    },
+    [addNotification]
+  );
+
+  const acceptPeerConnection = useCallback(
+    (matchId: string) => {
+      setPeerMatches((prev) =>
+        prev.map((m) => (m.id === matchId ? { ...m, status: 'connected' } : m))
+      );
+      addNotification(
+        'Peer Connection Accepted',
+        'You are now connected with your peer. You can unlock mutual identity verification whenever you choose.',
+        'in_app'
+      );
+    },
+    [addNotification]
+  );
+
+  const revealMutualIdentity = useCallback(
+    (matchId: string) => {
+      setPeerMatches((prev) =>
+        prev.map((m) => (m.id === matchId ? { ...m, mutualConsentRevealed: true } : m))
+      );
+      addNotification(
+        'Mutual Consent Verified: Identity Revealed',
+        'Both parties agreed to connect. Institutional credentials and contact information are now visible.',
+        'in_app'
+      );
+    },
+    [addNotification]
+  );
+
+  // Groups
+  const toggleGroupMembership = useCallback((groupId: string) => {
+    setGroups((prev) =>
+      prev.map((g) => {
+        if (g.id !== groupId) return g;
+        const nextIsMember = !g.isMember;
+        return {
+          ...g,
+          isMember: nextIsMember,
+          membersCount: nextIsMember ? g.membersCount + 1 : Math.max(1, g.membersCount - 1),
+        };
+      })
+    );
+  }, []);
+
+  const createLearningGroup = useCallback(
+    (
+      name: string,
+      topic: string,
+      description: string,
+      meetingMode: 'Campus Innovation Lab' | 'Virtual Room' | 'Library Discussion Hub',
+      tags: string[]
+    ) => {
+      const newGroup: LearningGroup = {
+        id: `group-${Date.now()}`,
+        name,
+        topic,
+        description,
+        membersCount: 1,
+        maxMembers: 30,
+        creatorAlias: alias.aliasName,
+        meetingMode,
+        tags,
+        isMember: true,
+        resourcesCount: 1,
+      };
+      setGroups((prev) => [newGroup, ...prev]);
+      return newGroup;
+    },
+    [alias.aliasName]
+  );
+
+  // Reporting & Moderation
+  const reportCommunityContent = useCallback(
+    (
+      targetType: 'post' | 'comment' | 'user',
+      targetId: string,
+      targetTitle: string,
+      reason: string
+    ) => {
+      const newReport: CommunityReport = {
+        id: `rep-${Date.now()}`,
+        targetType,
+        targetId,
+        targetTitle,
+        reason,
+        reportedByAlias: alias.aliasName,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+      setReports((prev) => [newReport, ...prev]);
+      addNotification(
+        'Report Received',
+        'Thank you for protecting our campus community. Content moderators have been alerted.',
+        'in_app'
+      );
+      return newReport;
+    },
+    [addNotification, alias.aliasName]
+  );
+
+  const resolveReport = useCallback((reportId: string, status: 'resolved' | 'dismissed') => {
+    setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, status } : r)));
+  }, []);
+
+  // Event Attendance & Verification
+  const checkInAttendance = useCallback(
+    (opportunityId: string, passcode: string) => {
+      const targetOpp = opportunities.find((o) => o.id === opportunityId);
+      if (!targetOpp) return { success: false, message: 'Event not found.' };
+
+      const validCode = targetOpp.checkInCode || 'NCET2026';
+      if (passcode.trim().toUpperCase() !== validCode.toUpperCase()) {
+        return {
+          success: false,
+          message: 'Invalid check-in passcode. Please verify with the event organizer registration desk.',
+        };
+      }
+
+      const existing = attendanceRecords.find(
+        (a) => a.opportunityId === opportunityId && a.studentId === profile.uid
+      );
+      if (existing) {
+        return { success: false, message: 'You have already checked in to this event!' };
+      }
+
+      const newRecord: AttendanceRecord = {
+        id: `att-${Date.now()}`,
+        opportunityId,
+        opportunityTitle: targetOpp.title,
+        studentId: profile.uid,
+        studentName: profile.displayName,
+        studentEmail: profile.institutionalEmail || `${profile.uid}@ncet.ac.in`,
+        department: profile.department,
+        year: profile.year,
+        markedAt: new Date().toISOString(),
+        method: 'passcode',
+        verified: true,
+      };
+
+      setAttendanceRecords((prev) => [newRecord, ...prev]);
+      setProfile((prev) => ({
+        ...prev,
+        attendanceCount: (prev.attendanceCount || 0) + 1,
+      }));
+
+      setOpportunities((prev) =>
+        prev.map((o) =>
+          o.id === opportunityId ? { ...o, attendedCount: (o.attendedCount || 0) + 1 } : o
+        )
+      );
+
+      addNotification(
+        'Verified Attendance Recorded! 🎖️',
+        `You checked into "${targetOpp.title}". Verified participation record added to your portfolio.`,
+        'push'
+      );
+
+      return { success: true, message: 'Attendance recorded and verified!' };
+    },
+    [addNotification, attendanceRecords, opportunities, profile]
+  );
+
+  const organizerMarkAttendance = useCallback(
+    (recordId: string, present: boolean) => {
+      setAttendanceRecords((prev) =>
+        prev.map((rec) => (rec.id === recordId ? { ...rec, verified: present } : rec))
+      );
+    },
+    []
+  );
+
+  const toggleInterestInExternal = useCallback(
+    (oppId: string) => {
+      setOpportunities((prev) =>
+        prev.map((o) => {
+          if (o.id !== oppId) return o;
+          return {
+            ...o,
+            interestedPeerCount: (o.interestedPeerCount || 0) + 1,
+          };
+        })
+      );
+      addNotification(
+        'Attendance Interest Noted',
+        'We will suggest anonymous peers from NCET planning to attend without exposing your identity.',
+        'in_app'
+      );
+    },
+    [addNotification]
+  );
+
+  const reviewOpportunity = useCallback(
+    (oppId: string, decision: 'published' | 'rejected', reason?: string) => {
+      setOpportunities((prev) =>
+        prev.map((o) => {
+          if (o.id !== oppId) return o;
+          return {
+            ...o,
+            status: decision === 'published' ? 'published' : 'archived',
+            approvalStatus: decision,
+            rejectionReason: reason,
+          };
+        })
+      );
+    },
+    []
+  );
+
+  const postAnnouncement = useCallback(
+    (announcement: Omit<CampusAnnouncement, 'id' | 'createdAt'>) => {
+      const newAnn: CampusAnnouncement = {
+        ...announcement,
+        id: `ann-${Date.now()}`,
+        createdAt: new Date().toISOString(),
+      };
+      setAnnouncements((prev) => [newAnn, ...prev]);
+      addNotification(
+        'Campus Announcement Broadcasted',
+        `"${announcement.title}" sent to ${announcement.targetDept}.`,
+        'in_app'
+      );
+      return newAnn;
+    },
+    [addNotification]
+  );
+
   const recommendations = useMemo(
     () =>
       rankRecommendations(
@@ -746,5 +1241,33 @@ export function useNcetStore() {
     logEvent,
     addNotification,
     markNotificationRead,
+    // Anonymous Connect & Campus Modules
+    alias,
+    regenerateAlias,
+    posts,
+    createCommunityPost,
+    upvoteCommunityPost,
+    addCommunityComment,
+    polls,
+    votePoll,
+    createPoll,
+    peerMatches,
+    requestPeerConnection,
+    acceptPeerConnection,
+    revealMutualIdentity,
+    groups,
+    toggleGroupMembership,
+    createLearningGroup,
+    announcements,
+    postAnnouncement,
+    badges,
+    attendanceRecords,
+    checkInAttendance,
+    organizerMarkAttendance,
+    reports,
+    reportCommunityContent,
+    resolveReport,
+    toggleInterestInExternal,
+    reviewOpportunity,
   };
 }

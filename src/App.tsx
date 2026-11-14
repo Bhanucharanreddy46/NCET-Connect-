@@ -14,9 +14,11 @@ import {
   Shield,
   Sun,
   UserCircle,
+  Users,
   X,
 } from 'lucide-react';
 import { AdminDashboardView } from './components/AdminDashboardView';
+import { AnonymousConnectView } from './components/AnonymousConnectView';
 import { MessagingView } from './components/MessagingView';
 import { OrganizerPortalView } from './components/OrganizerPortalView';
 import { OfflineIndicator, PWAInstallButton } from './components/PWAControls';
@@ -31,6 +33,7 @@ import { getEnrolledBiometricId, verifyBiometricPasskey } from './utils/biometri
 type NavTab =
   | 'feed'
   | 'tracker'
+  | 'anonymous'
   | 'messages'
   | 'vault'
   | 'profile'
@@ -40,6 +43,7 @@ type NavTab =
 const TAB_LABELS: Record<NavTab, string> = {
   feed: 'Opportunity Feed',
   tracker: 'Tracker & Analytics',
+  anonymous: 'Anonymous Connect',
   messages: 'Recruiter Messages',
   vault: 'Document Vault',
   profile: 'Profile & AI Advisor',
@@ -95,6 +99,7 @@ export default function App() {
     section: 'student' | 'portal';
   }> = [
     { id: 'feed', label: 'Opportunity Feed', icon: Compass, section: 'student' },
+    { id: 'anonymous', label: 'Anonymous Connect', icon: Users, section: 'student' },
     { id: 'tracker', label: 'Tracker & Analytics', icon: BarChart3, section: 'student' },
     { id: 'messages', label: 'Direct Messages', icon: MessageSquare, section: 'student' },
     { id: 'vault', label: 'Document Vault', icon: Lock, section: 'student' },
@@ -428,10 +433,36 @@ export default function App() {
               recommendations={store.recommendations}
               allOpportunities={store.opportunities}
               applications={store.applications}
+              announcements={store.announcements}
               onSave={(opp) => void store.saveOrApplyOpportunity(opp, 'Saved')}
               onRegister={(opp) => void store.saveOrApplyOpportunity(opp, 'Applied')}
               onShare={(opp) => void store.logEvent(opp.id, 'share', opp.domain)}
               onInspect={(opp) => void store.logEvent(opp.id, 'click', opp.domain)}
+              onCheckIn={store.checkInAttendance}
+              onToggleInterest={store.toggleInterestInExternal}
+            />
+          )}
+
+          {activeTab === 'anonymous' && (
+            <AnonymousConnectView
+              alias={store.alias}
+              profile={store.profile}
+              posts={store.posts}
+              polls={store.polls}
+              peerMatches={store.peerMatches}
+              groups={store.groups}
+              onRegenerateAlias={store.regenerateAlias}
+              onCreatePost={store.createCommunityPost}
+              onUpvotePost={store.upvoteCommunityPost}
+              onAddComment={store.addCommunityComment}
+              onVotePoll={store.votePoll}
+              onCreatePoll={store.createPoll}
+              onRequestPeerConnection={store.requestPeerConnection}
+              onAcceptPeerConnection={store.acceptPeerConnection}
+              onRevealMutualIdentity={store.revealMutualIdentity}
+              onToggleGroupMembership={store.toggleGroupMembership}
+              onCreateLearningGroup={store.createLearningGroup}
+              onReportContent={store.reportCommunityContent}
             />
           )}
 
@@ -468,18 +499,25 @@ export default function App() {
               profile={store.profile}
               opportunities={store.opportunities}
               applications={store.applications}
+              alias={store.alias}
+              badges={store.badges}
+              attendanceRecords={store.attendanceRecords}
               onSaveProfile={store.updateProfile}
               onUnlockBiometric={store.setBiometricUnlocked}
               onTriggerNotification={(title, body, channel) =>
                 store.addNotification(title, body, channel)
               }
+              onNavigateToAnonymous={() => setActiveTab('anonymous')}
             />
           )}
 
           {activeTab === 'organizer' && (
             <OrganizerPortalView
               opportunities={store.opportunities}
+              attendanceRecords={store.attendanceRecords}
               onCreateOpportunity={(draft) => store.createOpportunity(draft, 'published')}
+              onOrganizerMarkAttendance={store.organizerMarkAttendance}
+              onPostAnnouncement={store.postAnnouncement}
             />
           )}
 
@@ -489,8 +527,13 @@ export default function App() {
               applications={store.applications}
               events={store.events}
               profile={store.profile}
+              attendanceRecords={store.attendanceRecords}
+              reports={store.reports}
+              announcements={store.announcements}
               onModerate={store.moderateOpportunity}
               onCreateIngested={store.createOpportunity}
+              onResolveReport={store.resolveReport}
+              onPostAnnouncement={store.postAnnouncement}
             />
           )}
         </main>

@@ -1,7 +1,27 @@
 import React, { useState } from 'react';
-import { Bell, BrainCircuit, Fingerprint, Mail, Save } from 'lucide-react';
+import {
+  Award,
+  Bell,
+  BrainCircuit,
+  CheckCircle2,
+  ExternalLink,
+  Fingerprint,
+  Lock,
+  Mail,
+  QrCode,
+  Save,
+  Shield,
+  UserCheck,
+} from 'lucide-react';
 import { DEPARTMENTS, YEARS } from '../data/seedData';
-import type { ApplicationRecord, Opportunity, StudentProfile } from '../types/ncet';
+import type {
+  ApplicationRecord,
+  AttendanceRecord,
+  CommunityAlias,
+  Opportunity,
+  StudentProfile,
+  StudentRecognitionBadge,
+} from '../types/ncet';
 import {
   clearBiometricPasskey,
   enrollBiometricPasskey,
@@ -14,18 +34,26 @@ interface ProfileAdvisorViewProps {
   profile: StudentProfile;
   opportunities: Opportunity[];
   applications: ApplicationRecord[];
+  alias?: CommunityAlias;
+  badges?: StudentRecognitionBadge[];
+  attendanceRecords?: AttendanceRecord[];
   onSaveProfile: (next: StudentProfile) => Promise<void>;
   onUnlockBiometric: (unlocked: boolean) => void;
   onTriggerNotification: (title: string, body: string, channel: 'push' | 'email') => Promise<void>;
+  onNavigateToAnonymous?: () => void;
 }
 
 export const ProfileAdvisorView: React.FC<ProfileAdvisorViewProps> = ({
   profile,
   opportunities,
   applications,
+  alias,
+  badges = [],
+  attendanceRecords = [],
   onSaveProfile,
   onUnlockBiometric,
   onTriggerNotification,
+  onNavigateToAnonymous,
 }) => {
   const [displayName, setDisplayName] = useState(profile.displayName);
   const [department, setDepartment] = useState(profile.department);
@@ -340,10 +368,150 @@ export const ProfileAdvisorView: React.FC<ProfileAdvisorViewProps> = ({
             Save Profile & Recompute Feed
           </button>
         </form>
+
+        {/* Verified Attendance History */}
+        <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-emerald-600" />
+              Verified Event Participation History ({attendanceRecords.length})
+            </h2>
+            <span className="text-[11px] text-slate-400">Official Campus Records</span>
+          </div>
+
+          {attendanceRecords.length === 0 ? (
+            <p className="text-xs text-slate-400 italic">
+              No verified attendance records yet. Check in to campus events using organizer passcodes.
+            </p>
+          ) : (
+            <div className="space-y-2.5">
+              {attendanceRecords.map((att) => (
+                <div
+                  key={att.id}
+                  className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 text-xs flex items-center justify-between"
+                >
+                  <div className="space-y-0.5">
+                    <div className="font-semibold text-slate-900 dark:text-white">
+                      {att.opportunityTitle}
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Method: {att.method.toUpperCase()} • Check-in: {new Date(att.markedAt).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Verified
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Student Recognition Badges */}
+        <div className="mt-8 pt-6 border-t border-slate-200 dark:border-slate-800 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Award className="w-4 h-4 text-amber-500" />
+              Earned Recognition Badges ({badges.filter((b) => b.unlocked).length} / {badges.length})
+            </h2>
+            <span className="text-[11px] text-slate-400">Participation Based</span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {badges.map((b) => (
+              <div
+                key={b.id}
+                className={`p-3 rounded-xl border transition-all text-xs space-y-1 ${
+                  b.unlocked
+                    ? 'border-amber-300/80 dark:border-amber-700/80 bg-amber-50/40 dark:bg-amber-950/20'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850 opacity-60'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                    <Award
+                      className={`w-4 h-4 ${
+                        b.unlocked ? 'text-amber-500' : 'text-slate-400'
+                      }`}
+                    />
+                    {b.title}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-400">
+                    {b.unlocked ? `Unlocked ${b.unlockedAt || 'recently'}` : 'Locked'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {b.description}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
       </section>
 
-      {/* Right Column: Security (Biometric), Reminders, and Deep-Thinking Career Strategist */}
+      {/* Right Column: Institutional ID, Anonymous Alias, Security & Strategist */}
       <div className="lg:col-span-5 space-y-6">
+        {/* Institutional Student Identity Card */}
+        <section className="rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+              <Shield className="w-3.5 h-3.5" />
+              NCET Institutional Student Identity
+            </span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+              Verified Student
+            </span>
+          </div>
+
+          <div className="space-y-1">
+            <div className="text-base font-bold text-slate-900 dark:text-white">
+              {profile.displayName}
+            </div>
+            <div className="text-xs text-slate-600 dark:text-slate-300 font-mono">
+              USN: {profile.usn || '1NC23CS094'} • {profile.department} · {profile.year}
+            </div>
+            <div className="text-xs text-slate-500 font-mono">
+              Email: {profile.institutionalEmail || `${profile.uid}@ncet.ac.in`}
+            </div>
+          </div>
+        </section>
+
+        {/* Anonymous Pseudonym Card */}
+        {alias && (
+          <section className="rounded-xl border border-indigo-200 dark:border-indigo-900/60 bg-indigo-50/40 dark:bg-indigo-950/20 p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                <Lock className="w-3.5 h-3.5" />
+                Anonymous Connect Pseudonym
+              </span>
+              <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400">
+                {alias.reputationPoints} Karma
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white">
+                  {alias.aliasName}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Decoupled from your institutional profile
+                </div>
+              </div>
+
+              {onNavigateToAnonymous && (
+                <button
+                  type="button"
+                  onClick={onNavigateToAnonymous}
+                  className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1"
+                >
+                  Enter Space <ExternalLink className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </section>
+        )}
         {/* Biometric & Automated Reminders */}
         <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
           <h2 className="text-base font-semibold text-slate-900 dark:text-white">

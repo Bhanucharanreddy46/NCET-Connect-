@@ -1,17 +1,31 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Bell,
   Bookmark,
+  Calendar,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Clock,
+  ExternalLink,
+  Flame,
+  Globe,
+  MapPin,
+  Megaphone,
+  QrCode,
   Search,
   Share2,
   Sparkles,
+  UserCheck,
+  Users,
+  X,
 } from 'lucide-react';
 import heroCampusImg from '../assets/images/ncet_campus_hero_1794631951978.jpg';
 import { DEPARTMENTS, INDUSTRIES } from '../data/seedData';
 import type {
   ApplicationRecord,
+  CampusAnnouncement,
   Opportunity,
   RecommendationResult,
   StudentProfile,
@@ -22,10 +36,13 @@ interface StudentFeedViewProps {
   recommendations: RecommendationResult[];
   allOpportunities: Opportunity[];
   applications: ApplicationRecord[];
+  announcements?: CampusAnnouncement[];
   onSave: (opp: Opportunity) => void;
   onRegister: (opp: Opportunity) => void;
   onShare: (opp: Opportunity) => void;
   onInspect: (opp: Opportunity) => void;
+  onCheckIn?: (opportunityId: string, passcode: string) => { success: boolean; message: string };
+  onToggleInterest?: (oppId: string) => void;
 }
 
 const OPPORTUNITY_TYPES = [
@@ -45,21 +62,31 @@ export const StudentFeedView: React.FC<StudentFeedViewProps> = ({
   recommendations,
   allOpportunities,
   applications,
+  announcements = [],
   onSave,
   onRegister,
   onShare,
   onInspect,
+  onCheckIn,
+  onToggleInterest,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('All Departments');
   const [industryFilter, setIndustryFilter] = useState('All Industries');
   const [typeFilter, setTypeFilter] = useState('All Types');
   const [modeFilter, setModeFilter] = useState('All Modes');
+  const [ecosystemFilter, setEcosystemFilter] = useState<'all' | 'campus' | 'external'>('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'calendar'>('grid');
   const [showAllFeed, setShowAllFeed] = useState(false);
   const [expandedBreakdownId, setExpandedBreakdownId] = useState<string | null>(null);
   const [polishedTips, setPolishedTips] = useState<Record<string, { text: string; tldr: string }>>({});
   const [polishingId, setPolishingId] = useState<string | null>(null);
   const [shareToast, setShareToast] = useState<string | null>(null);
+
+  // Check-In modal state
+  const [checkInTargetOpp, setCheckInTargetOpp] = useState<Opportunity | null>(null);
+  const [checkInPasscodeInput, setCheckInPasscodeInput] = useState('');
+  const [checkInFeedback, setCheckInFeedback] = useState<{ success: boolean; message: string } | null>(null);
 
   const savedIds = useMemo(
     () => new Set(applications.filter((a) => a.status === 'Saved').map((a) => a.opportunityId)),
@@ -96,6 +123,8 @@ export const StudentFeedView: React.FC<StudentFeedViewProps> = ({
   const filteredResults = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return itemsToFilter.filter(({ opportunity }) => {
+      if (ecosystemFilter === 'campus' && opportunity.isExternal) return false;
+      if (ecosystemFilter === 'external' && !opportunity.isExternal) return false;
       if (
         departmentFilter !== 'All Departments' &&
         !opportunity.departments.includes('All Departments') &&
@@ -118,6 +147,7 @@ export const StudentFeedView: React.FC<StudentFeedViewProps> = ({
         opportunity.organization,
         opportunity.domain,
         opportunity.industry,
+        opportunity.venue ?? '',
         opportunity.description,
         ...opportunity.tags,
       ]
@@ -125,7 +155,30 @@ export const StudentFeedView: React.FC<StudentFeedViewProps> = ({
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [departmentFilter, industryFilter, itemsToFilter, modeFilter, searchQuery, typeFilter]);
+  }, [departmentFilter, ecosystemFilter, industryFilter, itemsToFilter, modeFilter, searchQuery, typeFilter]);
+
+  const calendarEvents = useMemo(() => {
+    return allOpportunities
+      .filter((o) => o.status === 'published' && (o.eventDate || o.deadline))
+      .map((opp) => ({
+        ...opp,
+        displayDate: opp.eventDate || opp.deadline,
+      }))
+      .sort((a, b) => (a.displayDate > b.displayDate ? 1 : -1));
+  }, [allOpportunities]);
+
+  const handleExecuteCheckIn = () => {
+    if (!checkInTargetOpp || !onCheckIn) return;
+    const res = onCheckIn(checkInTargetOpp.id, checkInPasscodeInput);
+    setCheckInFeedback(res);
+    if (res.success) {
+      setTimeout(() => {
+        setCheckInTargetOpp(null);
+        setCheckInPasscodeInput('');
+        setCheckInFeedback(null);
+      }, 1800);
+    }
+  };
 
   const handlePolishWithAI = async (rec: RecommendationResult) => {
     const id = rec.opportunity.id;
@@ -239,6 +292,113 @@ export const StudentFeedView: React.FC<StudentFeedViewProps> = ({
           </div>
         </div>
       </section>
+
+      {/* Campus Announcements Banner */}
+      {announcements && announcements.length > 0 && (
+        <section className="bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-blue-900/40 border border-blue-500/30 rounded-xl p-4 text-slate-800 dark:text-slate-100 shadow-sm space-y-2">
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+            <Megaphone className="w-4 h-4 animate-bounce" />
+            Official Campus & Club Announcements
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {announcements.slice(0, 3).map((ann) => (
+              <div
+                key={ann.id}
+                className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm p-3 rounded-lg border border-slate-200/60 dark:border-slate-700 text-xs space-y-1"
+              >
+                <div className="flex items-center justify-between gap-1">
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                      ann.priority === 'urgent'
+                        ? 'bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300'
+                        : ann.priority === 'pinned'
+                        ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300'
+                        : 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300'
+                    }`}
+                  >
+                    {ann.priority}
+                  </span>
+                  <span className="text-[10px] text-slate-400">{ann.category}</span>
+                </div>
+                <div className="font-bold text-slate-900 dark:text-white leading-tight">
+                  {ann.title}
+                </div>
+                <p className="text-slate-600 dark:text-slate-300 line-clamp-2 text-[11px]">
+                  {ann.summary}
+                </p>
+                <div className="text-[10px] text-slate-400 pt-0.5 font-medium">
+                  By {ann.author}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Ecosystem & Mode View Switcher */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-1.5 overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setEcosystemFilter('all')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+              ecosystemFilter === 'all'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            All Opportunities
+          </button>
+          <button
+            type="button"
+            onClick={() => setEcosystemFilter('campus')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+              ecosystemFilter === 'campus'
+                ? 'bg-blue-600 text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            🏛️ Campus Hosted
+          </button>
+          <button
+            type="button"
+            onClick={() => setEcosystemFilter('external')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+              ecosystemFilter === 'external'
+                ? 'bg-indigo-600 text-white'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            🌐 Bengaluru Tech Community (External)
+          </button>
+        </div>
+
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode('grid')}
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
+              viewMode === 'grid'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-300'
+            }`}
+          >
+            Card Grid
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('calendar')}
+            className={`px-3 py-1 text-xs font-medium rounded-md transition-colors flex items-center gap-1.5 ${
+              viewMode === 'calendar'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-600 dark:text-slate-300'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            Campus Calendar
+          </button>
+        </div>
+      </div>
 
       {/* Search & Multi-Dimensional Filter Controls */}
       <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 space-y-4">
@@ -441,6 +601,60 @@ export const StudentFeedView: React.FC<StudentFeedViewProps> = ({
                     {opportunity.description}
                   </p>
 
+                  {/* External Ecosystem or Campus Venue Details */}
+                  {opportunity.isExternal ? (
+                    <div className="p-3 rounded-lg bg-indigo-50/80 dark:bg-indigo-950/40 border border-indigo-200/70 dark:border-indigo-800 text-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
+                          <Globe className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                          Bengaluru Tech Community (External Opportunity)
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                          Verified Partner
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-slate-600 dark:text-slate-300">
+                        <span>Venue: {opportunity.venue || 'Bengaluru Technology Hub'}</span>
+                        {opportunity.externalUrl && (
+                          <a
+                            href={opportunity.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+                          >
+                            Official Registration <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                      </div>
+                      <div className="pt-1 flex items-center justify-between text-[11px]">
+                        <span className="text-slate-500">
+                          {opportunity.interestedPeerCount || 0} NCET students interested in attending
+                        </span>
+                        {onToggleInterest && (
+                          <button
+                            type="button"
+                            onClick={() => onToggleInterest(opportunity.id)}
+                            className="text-indigo-600 dark:text-indigo-400 font-semibold hover:underline"
+                          >
+                            + Indicate Interest
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : opportunity.venue ? (
+                    <div className="text-xs text-slate-600 dark:text-slate-300 flex items-center gap-2 pt-0.5">
+                      <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span>{opportunity.venue}</span>
+                      {opportunity.eventDate && (
+                        <>
+                          <span>•</span>
+                          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{opportunity.eventDate} ({opportunity.timeSlot || 'Campus Hours'})</span>
+                        </>
+                      )}
+                    </div>
+                  ) : null}
+
                   {/* Unboxed inline metadata */}
                   <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 pt-1">
                     <div>
@@ -533,7 +747,7 @@ export const StudentFeedView: React.FC<StudentFeedViewProps> = ({
                 </div>
 
                 {/* Action Footer */}
-                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
@@ -560,23 +774,234 @@ export const StudentFeedView: React.FC<StudentFeedViewProps> = ({
                     </button>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => onRegister(opportunity)}
-                    disabled={isApplied}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
-                      isApplied
-                        ? 'bg-emerald-600 text-white cursor-default'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                    }`}
-                  >
-                    {isApplied && <Check className="w-3.5 h-3.5" aria-hidden="true" />}
-                    {isApplied ? 'Registered' : 'Apply / Register'}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {(isApplied || opportunity.checkInCode) && onCheckIn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCheckInTargetOpp(opportunity);
+                          setCheckInFeedback(null);
+                          setCheckInPasscodeInput('');
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 px-3 py-2 text-xs font-semibold hover:bg-indigo-100 transition-colors"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        Check In
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => onRegister(opportunity)}
+                      disabled={isApplied}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
+                        isApplied
+                          ? 'bg-emerald-600 text-white cursor-default'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {isApplied && <Check className="w-3.5 h-3.5" aria-hidden="true" />}
+                      {isApplied ? 'Registered' : 'Apply / Register'}
+                    </button>
+                  </div>
                 </div>
               </article>
             );
           })}
+        </div>
+      )}
+
+      {/* Campus Calendar View Mode */}
+      {viewMode === 'calendar' && (
+        <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-blue-600" />
+                Integrated Campus Event Calendar & Schedule
+              </h2>
+              <p className="text-xs text-slate-500">
+                Explore chronological campus fests, workshops, hackathons, and Bengaluru tech meetups.
+              </p>
+            </div>
+            <div className="text-xs font-medium text-slate-400">
+              Showing {calendarEvents.length} Scheduled Events
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {calendarEvents.map((evt) => {
+              const isRegistered = appliedIds.has(evt.id);
+              return (
+                <div
+                  key={evt.id}
+                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-blue-400 transition-all bg-slate-50/50 dark:bg-slate-850"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-14 h-14 rounded-xl bg-blue-100 dark:bg-blue-950/80 border border-blue-200 dark:border-blue-800 flex flex-col items-center justify-center text-center shrink-0">
+                      <span className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400">
+                        {new Date(evt.displayDate).toLocaleString('default', { month: 'short' })}
+                      </span>
+                      <span className="text-lg font-extrabold text-blue-900 dark:text-blue-100 leading-none">
+                        {new Date(evt.displayDate).getDate() || '15'}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                          {evt.type}
+                        </span>
+                        {evt.isExternal ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-indigo-50 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300">
+                            Bengaluru Community
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
+                            NCET Campus
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-400 font-medium">
+                          {evt.organization}
+                        </span>
+                      </div>
+
+                      <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                        {evt.title}
+                      </h3>
+
+                      <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                        {evt.venue && (
+                          <span className="flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5" />
+                            {evt.venue}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          {evt.timeSlot || 'Day Schedule'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    {evt.checkInCode && isRegistered && onCheckIn && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCheckInTargetOpp(evt);
+                          setCheckInFeedback(null);
+                          setCheckInPasscodeInput('');
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white flex items-center gap-1"
+                      >
+                        <QrCode className="w-3.5 h-3.5" />
+                        Check In
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => onRegister(evt)}
+                      disabled={isRegistered}
+                      className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                        isRegistered
+                          ? 'bg-emerald-600 text-white cursor-default'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {isRegistered ? 'Registered' : 'Register'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* Check-In Modal */}
+      {checkInTargetOpp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                <QrCode className="w-5 h-5" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Event Attendance Check-In
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCheckInTargetOpp(null)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-sm font-bold text-slate-900 dark:text-white">
+                {checkInTargetOpp.title}
+              </div>
+              <p className="text-xs text-slate-500">
+                Organized by {checkInTargetOpp.organization} • Venue: {checkInTargetOpp.venue || 'NCET Campus'}
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-xs space-y-1.5">
+              <div className="font-semibold text-slate-700 dark:text-slate-300">
+                How to record attendance:
+              </div>
+              <p className="text-slate-500">
+                Enter the 6-digit passcode displayed by event organizers at the registration podium or projector screen (e.g. <span className="font-mono font-bold text-slate-700 dark:text-slate-200">{checkInTargetOpp.checkInCode || 'GDG782'}</span>).
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                Event Passcode
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. GDG782"
+                value={checkInPasscodeInput}
+                onChange={(e) => setCheckInPasscodeInput(e.target.value.toUpperCase())}
+                className="w-full px-3 py-2.5 rounded-lg text-sm font-mono tracking-widest text-center uppercase bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
+            {checkInFeedback && (
+              <div
+                className={`p-3 rounded-lg text-xs font-medium ${
+                  checkInFeedback.success
+                    ? 'bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-200'
+                    : 'bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/60 dark:text-rose-200'
+                }`}
+              >
+                {checkInFeedback.message}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setCheckInTargetOpp(null)}
+                className="flex-1 py-2 text-xs font-medium text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteCheckIn}
+                disabled={!checkInPasscodeInput.trim()}
+                className="flex-1 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg disabled:opacity-50"
+              >
+                Verify Attendance
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

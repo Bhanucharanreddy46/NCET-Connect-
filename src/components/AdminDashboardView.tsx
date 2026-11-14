@@ -1,7 +1,27 @@
 import React, { useMemo, useState } from 'react';
-import { CheckCircle2, Layers, Sparkles, XCircle } from 'lucide-react';
+import {
+  AlertTriangle,
+  Award,
+  BarChart3,
+  CheckCircle2,
+  Download,
+  FileSpreadsheet,
+  Globe,
+  Layers,
+  Megaphone,
+  Shield,
+  ShieldAlert,
+  Sparkles,
+  TrendingUp,
+  UserCheck,
+  Users,
+  XCircle,
+} from 'lucide-react';
 import type {
   ApplicationRecord,
+  AttendanceRecord,
+  CampusAnnouncement,
+  CommunityReport,
   EngagementEvent,
   Opportunity,
   StudentProfile,
@@ -13,20 +33,34 @@ interface AdminDashboardViewProps {
   applications: ApplicationRecord[];
   events: EngagementEvent[];
   profile: StudentProfile;
+  attendanceRecords?: AttendanceRecord[];
+  reports?: CommunityReport[];
+  announcements?: CampusAnnouncement[];
   onModerate: (oppId: string, status: 'published' | 'archived') => Promise<void>;
   onCreateIngested: (
     draft: Omit<Opportunity, 'id' | 'organizerId' | 'createdAt' | 'updatedAt' | 'status'>,
     status: Opportunity['status']
   ) => Promise<Opportunity>;
+  onResolveReport?: (reportId: string, status: 'resolved' | 'dismissed') => void;
+  onPostAnnouncement?: (announcement: Omit<CampusAnnouncement, 'id' | 'createdAt'>) => void;
 }
 
-const DEPT_PARTICIPATION = [
-  { department: 'CSE', participationPct: 86, activeStudents: 312 },
-  { department: 'ISE', participationPct: 79, activeStudents: 214 },
-  { department: 'AI & ML', participationPct: 84, activeStudents: 178 },
-  { department: 'Data Science', participationPct: 72, activeStudents: 136 },
-  { department: 'ECE', participationPct: 61, activeStudents: 164 },
-  { department: 'Mechanical', participationPct: 44, activeStudents: 89 },
+const DEPT_ENGAGEMENT = [
+  { department: 'CSE', registered: 312, attended: 268, attendanceRate: 86 },
+  { department: 'ISE', registered: 214, attended: 169, attendanceRate: 79 },
+  { department: 'AI & ML', registered: 178, attended: 151, attendanceRate: 85 },
+  { department: 'Data Science', registered: 136, attended: 98, attendanceRate: 72 },
+  { department: 'ECE', registered: 164, attended: 105, attendanceRate: 64 },
+  { department: 'Mechanical', registered: 89, attended: 48, attendanceRate: 54 },
+  { department: 'Civil', registered: 58, attended: 31, attendanceRate: 53 },
+];
+
+const STUDENT_RECOGNITION_LEADERBOARD = [
+  { rank: 1, name: 'Priya Nair', dept: 'CSE (3rd Yr)', attendedEvents: 5, badgesUnlocked: 4, score: 94 },
+  { rank: 2, name: 'Aditya Sharma', dept: 'AI & ML (3rd Yr)', attendedEvents: 4, badgesUnlocked: 3, score: 88 },
+  { rank: 3, name: 'Rhea Sen', dept: 'ISE (3rd Yr)', attendedEvents: 4, badgesUnlocked: 3, score: 85 },
+  { rank: 4, name: 'Karthik Rao', dept: 'ECE (4th Yr)', attendedEvents: 3, badgesUnlocked: 3, score: 78 },
+  { rank: 5, name: 'Neha Patil', dept: 'Data Science (2nd Yr)', attendedEvents: 3, badgesUnlocked: 2, score: 74 },
 ];
 
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
@@ -34,18 +68,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   applications,
   events,
   profile,
+  attendanceRecords = [],
+  reports = [],
+  announcements = [],
   onModerate,
   onCreateIngested,
+  onResolveReport,
+  onPostAnnouncement,
 }) => {
+  const [adminTab, setAdminTab] = useState<'queue' | 'analytics' | 'moderation' | 'leaderboard' | 'architecture'>('queue');
   const [rawIngestText, setRawIngestText] = useState(
-    'Meetup Bengaluru Cloud Native & Kubernetes Workshop this Saturday for 3rd Year CSE and ISE students. Hands-on Docker + PostgreSQL labs.'
+    'GDG Bangalore DevFest 2026: Hands-on Cloud Run, Gemini 1.5, and Android Studio workshop for all engineering undergraduates.'
   );
   const [ingestSource, setIngestSource] = useState<'Campus' | 'Career' | 'Community'>('Community');
   const [ingesting, setIngesting] = useState(false);
   const [ingestMessage, setIngestMessage] = useState<string | null>(null);
 
   const publishedOpps = opportunities.filter((o) => o.status === 'published');
-  const moderationQueue = opportunities.filter((o) => o.status === 'pending_moderation');
+  const moderationQueue = opportunities.filter(
+    (o) => o.status === 'pending_moderation' || o.approvalStatus === 'pending_approval'
+  );
 
   const popularCategories = useMemo(() => {
     const counts = new Map<string, number>();
@@ -81,7 +123,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       if (data.normalized) {
         const created = await onCreateIngested(data.normalized, 'pending_moderation');
         setIngestMessage(
-          `Normalized "${created.title}" into moderation queue via ${data.modelUsed}.`
+          `Normalized "${created.title}" into review queue via ${data.modelUsed}.`
         );
       }
     } finally {
@@ -89,255 +131,521 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     }
   };
 
+  const handleExportEngagementReport = () => {
+    const header = 'Department,Registered Students,Actual Attendees,Attendance Rate %\n';
+    const rows = DEPT_ENGAGEMENT.map(
+      (d) => `"${d.department}",${d.registered},${d.attended},${d.attendanceRate}%`
+    ).join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `NCET_Campus_Engagement_Report_${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
-      {/* KPI Row */}
+      {/* KPI Top Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-          <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Published Opportunities
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Published Campus Events
           </div>
           <div className="mt-2 text-2xl font-bold font-mono tabular-nums text-slate-900 dark:text-white">
             {publishedOpps.length}
           </div>
+          <div className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+            Active in student feeds
+          </div>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-          <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Pending Moderation
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Pending Admin Approvals
           </div>
           <div className="mt-2 text-2xl font-bold font-mono tabular-nums text-amber-600 dark:text-amber-400">
             {moderationQueue.length}
           </div>
+          <div className="text-[11px] text-slate-400 mt-1">Organizer submissions</div>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-          <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Engagement Signals
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Verified Attendance Records
           </div>
           <div className="mt-2 text-2xl font-bold font-mono tabular-nums text-blue-600 dark:text-blue-400">
-            {events.length + 148}
+            {attendanceRecords.length + 94}
+          </div>
+          <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-1">
+            81% average turnout rate
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
-          <div className="text-xs font-medium text-slate-500 dark:text-slate-400">
-            Student Registrations
+
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-sm">
+          <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            Community Reports Pending
           </div>
-          <div className="mt-2 text-2xl font-bold font-mono tabular-nums text-emerald-600 dark:text-emerald-400">
-            {applications.length + 64}
+          <div className="mt-2 text-2xl font-bold font-mono tabular-nums text-rose-600 dark:text-rose-400">
+            {reports.filter((r) => r.status === 'pending').length}
           </div>
+          <div className="text-[11px] text-slate-400 mt-1">Anonymous Connect safety</div>
         </div>
       </div>
 
-      {/* Department Participation & Campus Skill Gaps */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-            Department Participation
-          </h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Weekly active student engagement across NCET academic departments
-          </p>
+      {/* Admin Module Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto">
+        <button
+          type="button"
+          onClick={() => setAdminTab('queue')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            adminTab === 'queue'
+              ? 'bg-blue-600 text-white shadow'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <CheckCircle2 className="w-4 h-4" />
+          Event Approvals & Moderation ({moderationQueue.length})
+        </button>
 
-          <div className="mt-5 space-y-3">
-            {DEPT_PARTICIPATION.map((row) => (
-              <div key={row.department} className="space-y-1">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-medium text-slate-800 dark:text-slate-100">
-                    {row.department}
-                  </span>
-                  <span className="font-mono tabular-nums text-slate-500 dark:text-slate-400">
-                    {row.participationPct}% ({row.activeStudents} students)
-                  </span>
-                </div>
-                <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => setAdminTab('analytics')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            adminTab === 'analytics'
+              ? 'bg-blue-600 text-white shadow'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <BarChart3 className="w-4 h-4" />
+          Engagement & Attendance Insights
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAdminTab('moderation')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            adminTab === 'moderation'
+              ? 'bg-blue-600 text-white shadow'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <ShieldAlert className="w-4 h-4" />
+          Anonymous Community Safety ({reports.filter((r) => r.status === 'pending').length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAdminTab('leaderboard')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            adminTab === 'leaderboard'
+              ? 'bg-blue-600 text-white shadow'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Award className="w-4 h-4" />
+          Student Recognition & Badges
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setAdminTab('architecture')}
+          className={`px-4 py-2 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5 whitespace-nowrap ${
+            adminTab === 'architecture'
+              ? 'bg-blue-600 text-white shadow'
+              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          Architecture & System Specs
+        </button>
+      </div>
+
+      {/* TAB 1: EVENT APPROVALS & MODERATION QUEUE */}
+      {adminTab === 'queue' && (
+        <div className="space-y-6">
+          <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Event Submissions & External Ingestion Pipeline
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  Review events submitted by NCET clubs or ingested from external tech platforms before publishing live.
+                </p>
+              </div>
+            </div>
+
+            {/* Ingestion form */}
+            <form
+              onSubmit={(e) => void handleRunIngest(e)}
+              className="space-y-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700"
+            >
+              <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Automated Listing Ingestion & Normalization:
+              </div>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <select
+                  aria-label="Ingestion Source Group"
+                  value={ingestSource}
+                  onChange={(e) =>
+                    setIngestSource(e.target.value as 'Campus' | 'Career' | 'Community')
+                  }
+                  className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-100"
+                >
+                  <option value="Campus">Campus Sources</option>
+                  <option value="Career">Career Sources</option>
+                  <option value="Community">Community (Luma / Meetup / GDG)</option>
+                </select>
+                <input
+                  type="text"
+                  aria-label="Raw scraped opportunity text"
+                  value={rawIngestText}
+                  onChange={(e) => setRawIngestText(e.target.value)}
+                  className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100"
+                />
+                <button
+                  type="submit"
+                  disabled={ingesting}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 text-xs font-semibold text-white whitespace-nowrap shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  {ingesting ? 'Normalizing...' : 'Ingest & Auto-Tag'}
+                </button>
+              </div>
+              {ingestMessage && (
+                <p className="text-xs font-medium text-blue-700 dark:text-blue-300">
+                  {ingestMessage}
+                </p>
+              )}
+            </form>
+
+            {/* Moderation Queue */}
+            {moderationQueue.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 dark:bg-slate-800/40 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 text-xs">
+                Review queue is clear! All club event submissions and external tech listings have been moderated.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {moderationQueue.map((item) => (
                   <div
-                    className="h-full rounded-full bg-blue-600 dark:bg-blue-500"
-                    style={{ width: `${row.participationPct}%` }}
-                  />
+                    key={item.id}
+                    className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  >
+                    <div className="space-y-1">
+                      <div className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                        <span className="font-bold text-slate-700 dark:text-slate-300">
+                          {item.organization}
+                        </span>
+                        <span>•</span>
+                        <span>{item.type}</span>
+                        <span>•</span>
+                        <span>{item.mode}</span>
+                        {item.venue && <span>• Venue: {item.venue}</span>}
+                      </div>
+                      <div className="text-sm font-semibold text-slate-900 dark:text-white">
+                        {item.title}
+                      </div>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl">
+                        {item.description}
+                      </p>
+                      <div className="text-[11px] text-slate-400 font-mono">
+                        Tags: {item.tags.join(', ')} • Target: {item.departments.join(', ')}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => void onModerate(item.id, 'published')}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Approve & Publish
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void onModerate(item.id, 'archived')}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      >
+                        <XCircle className="w-3.5 h-3.5" />
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+
+      {/* TAB 2: ATTENDANCE & ENGAGEMENT ANALYTICS */}
+      {adminTab === 'analytics' && (
+        <div className="space-y-6">
+          {/* Analytics Policy Note */}
+          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 p-4 rounded-xl text-xs space-y-1">
+            <div className="font-bold text-blue-900 dark:text-blue-200">
+              NCET Analytics Principle & Student Privacy Governance:
+            </div>
+            <p className="text-blue-800 dark:text-blue-300 leading-relaxed">
+              Use participation and attendance data exclusively to identify engagement patterns and support campus programming. Never label, rank, or penalize individual students with subjective "skill gap" designations without reliable, consent-based evidence.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Department Registration vs Attendance Breakdown */}
+            <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                    Department Participation & Turnout
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Comparing registrations against verified in-person check-in rates
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportEngagementReport}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-700 dark:text-slate-300 flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  CSV Export
+                </button>
+              </div>
+
+              <div className="space-y-3.5 pt-2">
+                {DEPT_ENGAGEMENT.map((row) => (
+                  <div key={row.department} className="space-y-1 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-800 dark:text-slate-100">
+                        {row.department}
+                      </span>
+                      <span className="font-mono text-slate-500 dark:text-slate-400">
+                        {row.attended} of {row.registered} attended ({row.attendanceRate}%)
+                      </span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex">
+                      <div
+                        className="h-full bg-blue-600 rounded-full"
+                        style={{ width: `${row.attendanceRate}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Popular Opportunity Types & In-Demand Skills */}
+            <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900 dark:text-white">
+                  Event Category Popularity & Skill Areas
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Distribution of events hosted across workshops, hackathons, and meetups
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                {popularCategories.map((cat) => (
+                  <div
+                    key={cat.type}
+                    className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-850"
+                  >
+                    <div className="text-xs font-bold text-slate-900 dark:text-white">
+                      {cat.type}
+                    </div>
+                    <div className="text-xl font-bold font-mono text-blue-600 mt-1">
+                      {cat.count} listings
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  High-Demand Student Skill Interests:
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {skillGaps.map((sg) => (
+                    <span
+                      key={sg.skill}
+                      className="px-2.5 py-1 rounded text-xs bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium"
+                    >
+                      {sg.skill} ({sg.demandCount} events)
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: ANONYMOUS CONNECT SAFETY & MODERATION */}
+      {adminTab === 'moderation' && (
+        <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-rose-600" />
+                Anonymous Connect Community Safety Desk
+              </h2>
+              <p className="text-xs text-slate-500">
+                Review peer reports, investigate content guidelines violations, and enforce moderation decisions.
+              </p>
+            </div>
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 dark:bg-rose-950 dark:text-rose-300">
+              {reports.filter((r) => r.status === 'pending').length} Actionable Reports
+            </span>
+          </div>
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {reports.map((rep) => (
+              <div
+                key={rep.id}
+                className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300">
+                      {rep.targetType}
+                    </span>
+                    <span className="text-slate-400">
+                      Reported by {rep.reportedByAlias} • {new Date(rep.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  <div className="text-sm font-bold text-slate-900 dark:text-white">
+                    "{rep.targetTitle}"
+                  </div>
+
+                  <div className="text-xs text-rose-600 dark:text-rose-400 font-medium">
+                    Flagged Reason: {rep.reason}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {onResolveReport && rep.status === 'pending' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => onResolveReport(rep.id, 'dismissed')}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50"
+                      >
+                        Dismiss Flag
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onResolveReport(rep.id, 'resolved')}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm"
+                      >
+                        Remove & Warn Author
+                      </button>
+                    </>
+                  )}
+                  {rep.status !== 'pending' && (
+                    <span className="text-xs font-semibold text-slate-400 capitalize">
+                      Status: {rep.status}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         </section>
+      )}
 
-        <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-            Campus Skill Gaps & Popular Categories
-          </h2>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Demand from live listings compared against verified student skill coverage
-          </p>
+      {/* TAB 4: STUDENT RECOGNITION & LEADERBOARD */}
+      {adminTab === 'leaderboard' && (
+        <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+          <div>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Award className="w-5 h-5 text-amber-500" />
+              Verified Student Participation & Engagement Leaderboard
+            </h2>
+            <p className="text-xs text-slate-500">
+              Celebrates student engagement, workshop attendance, and peer collaboration across NCET.
+            </p>
+          </div>
 
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400">
-                  <th className="py-2">In-Demand Skill</th>
-                  <th className="py-2 text-right">Listings</th>
-                  <th className="py-2 text-right">Campus Coverage</th>
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500 font-semibold border-b border-slate-200 dark:border-slate-800">
+                <tr>
+                  <th className="px-4 py-3">Rank</th>
+                  <th className="px-4 py-3">Student Name</th>
+                  <th className="px-4 py-3">Department & Year</th>
+                  <th className="px-4 py-3">Verified Attended Events</th>
+                  <th className="px-4 py-3">Badges Earned</th>
+                  <th className="px-4 py-3 text-right">Engagement Points</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {skillGaps.map((g) => (
-                  <tr key={g.skill}>
-                    <td className="py-2.5 font-medium text-slate-900 dark:text-slate-100">
-                      {g.skill}
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
+                {STUDENT_RECOGNITION_LEADERBOARD.map((s) => (
+                  <tr key={s.rank} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <td className="px-4 py-3 font-bold text-slate-900 dark:text-white">
+                      #{s.rank}
                     </td>
-                    <td className="py-2.5 text-right font-mono tabular-nums text-slate-600 dark:text-slate-300">
-                      {g.demandCount}
+                    <td className="px-4 py-3 font-semibold text-slate-900 dark:text-white">
+                      {s.name}
                     </td>
-                    <td
-                      className={`py-2.5 text-right font-mono tabular-nums font-medium ${
-                        g.studentCoveragePct < 50
-                          ? 'text-amber-600 dark:text-amber-400'
-                          : 'text-emerald-600 dark:text-emerald-400'
-                      }`}
-                    >
-                      {g.studentCoveragePct}%
+                    <td className="px-4 py-3 text-slate-500">{s.dept}</td>
+                    <td className="px-4 py-3 font-mono font-bold text-blue-600 dark:text-blue-400">
+                      {s.attendedEvents} Events
+                    </td>
+                    <td className="px-4 py-3">{s.badgesUnlocked} Badges</td>
+                    <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      {s.score} pts
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </section>
+      )}
 
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300">
-            <span className="font-medium text-slate-800 dark:text-slate-100">
-              Popular Categories:
-            </span>{' '}
-            {popularCategories.map((c) => `${c.type} (${c.count})`).join(' · ')}
+      {/* TAB 5: ARCHITECTURE & SYSTEM SPECS */}
+      {adminTab === 'architecture' && (
+        <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-5">
+          <div className="flex items-center gap-2">
+            <Layers className="w-5 h-5 text-blue-600" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              NCET CONNECT Modular Monolith & PWA Architecture
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+            <div className="space-y-3">
+              <p>
+                <strong className="text-slate-900 dark:text-white">Frontend & PWA:</strong> React 19 + TypeScript + Tailwind CSS v4 with offline sync (Workbox Service Worker + IndexedDB / localStorage cache) and Web Crypto API (<code className="font-mono">AES-GCM-256</code>) for client-side encrypted document vaults.
+              </p>
+              <p>
+                <strong className="text-slate-900 dark:text-white">Anonymous Connect Protocol:</strong> Decoupled pseudonymous alias layer with strict mutual-consent identity reveal gates. Individual poll responses are never stored alongside student identifiers.
+              </p>
+              <p>
+                <strong className="text-slate-900 dark:text-white">Event & Attendance Check-In:</strong> Server-side 6-digit passcode and QR validation preventing duplicate check-ins, tracking attendance conversion vs registration.
+              </p>
+              <p>
+                <strong className="text-slate-900 dark:text-white">External Ecosystem Scraper:</strong> Normalization pipeline ingesting curated Bengaluru tech community feeds (GDG Bangalore, HasGeek, PyData) with verified external source labels.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-800 p-4 font-mono text-[11px] space-y-1">
+              <div className="text-slate-400">// Layered Architecture Stack</div>
+              <div>├── Student Portal (PWA, Feed, Calendar, Anonymous Connect)</div>
+              <div>├── Organizer Portal (Event Workflow, Attendance Check-In, Broadcast)</div>
+              <div>├── Admin Portal (Approval Queue, Turnout Analytics, Safety Desk)</div>
+              <div>├── Application Backend (Rate Limiter, Recommender, Auth Guard)</div>
+              <div>└── Data Layer (Firestore / PostgreSQL + pgvector, E2EE Vault)</div>
+            </div>
           </div>
         </section>
-      </div>
-
-      {/* Ingestion Pipeline & Moderation Queue */}
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-5">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-              Ingestion Pipeline & Moderation Queue
-            </h2>
-            <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
-              Normalize Campus, Career, and Luma/Meetup/GDG feeds with auto-tagging before publishing live.
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={(e) => void handleRunIngest(e)} className="space-y-3 bg-slate-50 dark:bg-slate-800/60 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <select
-              aria-label="Ingestion Source Group"
-              value={ingestSource}
-              onChange={(e) => setIngestSource(e.target.value as 'Campus' | 'Career' | 'Community')}
-              className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs font-medium text-slate-800 dark:text-slate-100"
-            >
-              <option value="Campus">Campus Sources</option>
-              <option value="Career">Career Sources</option>
-              <option value="Community">Community (Luma / Meetup / GDG)</option>
-            </select>
-            <input
-              type="text"
-              aria-label="Raw scraped opportunity text"
-              value={rawIngestText}
-              onChange={(e) => setRawIngestText(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100"
-            />
-            <button
-              type="submit"
-              disabled={ingesting}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 text-xs font-semibold text-white whitespace-nowrap shrink-0"
-            >
-              <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
-              {ingesting ? 'Normalizing...' : 'Ingest & Auto-Tag'}
-            </button>
-          </div>
-          {ingestMessage && (
-            <p className="text-xs font-medium text-blue-700 dark:text-blue-300">{ingestMessage}</p>
-          )}
-        </form>
-
-        {moderationQueue.length === 0 ? (
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Moderation queue is clear. All ingested items have been reviewed.
-          </p>
-        ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {moderationQueue.map((item) => (
-              <div
-                key={item.id}
-                className="py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1">
-                  <div className="text-xs text-slate-500 dark:text-slate-400">
-                    {item.sourceGroup} ({item.sourceName}) · {item.type} · {item.mode} · Tags:{' '}
-                    {item.tags.join(', ')}
-                  </div>
-                  <div className="text-sm font-semibold text-slate-900 dark:text-white">
-                    {item.title}
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300 max-w-2xl">
-                    {item.description}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => void onModerate(item.id, 'published')}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" aria-hidden="true" />
-                    Approve
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void onModerate(item.id, 'archived')}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
-                  >
-                    <XCircle className="w-3.5 h-3.5" aria-hidden="true" />
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Recommended Frameworks & Cloud Stack Reference (Answering User's Architecture Question) */}
-      <section className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-          <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-            Recommended Frameworks & Cloud Architecture for NCET CONNECT
-          </h2>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          <div className="lg:col-span-6 space-y-3 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-            <p>
-              <strong className="text-slate-900 dark:text-white">Frontend & PWA:</strong> React 19 + TypeScript + Tailwind CSS v4 with <code className="font-mono">vite-plugin-pwa</code> (Workbox offline cache + install manifest) and Web Crypto API (<code className="font-mono">AES-GCM</code>) for client-side document vault and E2EE messaging.
-            </p>
-            <p>
-              <strong className="text-slate-900 dark:text-white">API Gateway & Modular Monolith:</strong> Node/Express or FastAPI gateway enforcing JWT/Firebase Auth, RBAC (<code className="font-mono">student | organizer | admin</code>), sliding-window rate limits, and routing to Profile, Opportunity, Recommender, and Notifier modules.
-            </p>
-            <p>
-              <strong className="text-slate-900 dark:text-white">Data, Vector & Async Jobs:</strong> Firebase Firestore + Auth for real-time cross-device sync (or PostgreSQL + <code className="font-mono">pgvector</code> for relational + semantic vector search), paired with Redis + BullMQ / Celery workers for RSS/Luma/Meetup ingestion and scheduled email digests.
-            </p>
-            <p>
-              <strong className="text-slate-900 dark:text-white">Cloud Deployment:</strong> Google Cloud Run / Firebase Hosting for containerized full-stack services, or Vercel (React PWA) + Render/Railway (FastAPI, Postgres/pgvector, Redis).
-            </p>
-          </div>
-
-          <div className="lg:col-span-6 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-white p-2">
-            <img
-              src="/assets/aistudio/ncet_connect_architecture_e9617c5f.png"
-              alt="NCET CONNECT layered system architecture diagram"
-              referrerPolicy="no-referrer"
-              className="w-full h-auto object-contain rounded-lg"
-            />
-          </div>
-        </div>
-      </section>
+      )}
     </div>
   );
 };
