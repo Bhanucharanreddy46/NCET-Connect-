@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Award,
   BarChart3,
   Bell,
   Compass,
@@ -11,7 +12,9 @@ import {
   MessageSquare,
   Moon,
   PlusSquare,
+  Search,
   Shield,
+  Sparkles,
   Sun,
   UserCircle,
   Users,
@@ -19,10 +22,14 @@ import {
 } from 'lucide-react';
 import { AdminDashboardView } from './components/AdminDashboardView';
 import { AnonymousConnectView } from './components/AnonymousConnectView';
+import { AuthView } from './components/AuthView';
+import { CampusCirclesView } from './components/CampusCirclesView';
 import { MessagingView } from './components/MessagingView';
+import { OpportunityDiscoveryView } from './components/OpportunityDiscoveryView';
 import { OrganizerPortalView } from './components/OrganizerPortalView';
 import { OfflineIndicator, PWAInstallButton } from './components/PWAControls';
 import { ProfileAdvisorView } from './components/ProfileAdvisorView';
+import { RecognitionView } from './components/RecognitionView';
 import { StudentFeedView } from './components/StudentFeedView';
 import { TrackerAnalyticsView } from './components/TrackerAnalyticsView';
 import { VaultView } from './components/VaultView';
@@ -32,6 +39,9 @@ import { getEnrolledBiometricId, verifyBiometricPasskey } from './utils/biometri
 
 type NavTab =
   | 'feed'
+  | 'discovery'
+  | 'circles'
+  | 'recognition'
   | 'tracker'
   | 'anonymous'
   | 'messages'
@@ -41,14 +51,17 @@ type NavTab =
   | 'admin';
 
 const TAB_LABELS: Record<NavTab, string> = {
-  feed: 'Opportunity Feed',
-  tracker: 'Tracker & Analytics',
-  anonymous: 'Anonymous Connect',
-  messages: 'Recruiter Messages',
+  feed: 'Campus Activity',
+  discovery: 'Explore & Search',
+  circles: 'Campus Circles (Peers)',
+  recognition: 'Honors & Badges',
+  tracker: 'Application Tracker',
+  anonymous: 'Anonymous Feed',
+  messages: 'Direct Messages',
   vault: 'Document Vault',
-  profile: 'Profile & AI Advisor',
-  organizer: 'Organizer Portal',
-  admin: 'Admin Insights',
+  profile: 'Student Profile',
+  organizer: 'Organizer Desk',
+  admin: 'Admin Console',
 };
 
 export default function App() {
@@ -98,14 +111,17 @@ export default function App() {
     icon: React.ComponentType<{ className?: string }>;
     section: 'student' | 'portal';
   }> = [
-    { id: 'feed', label: 'Opportunity Feed', icon: Compass, section: 'student' },
-    { id: 'anonymous', label: 'Anonymous Connect', icon: Users, section: 'student' },
-    { id: 'tracker', label: 'Tracker & Analytics', icon: BarChart3, section: 'student' },
+    { id: 'feed', label: 'Campus Feed', icon: Compass, section: 'student' },
+    { id: 'discovery', label: 'Explore & Search', icon: Search, section: 'student' },
+    { id: 'circles', label: 'Campus Circles', icon: Users, section: 'student' },
+    { id: 'recognition', label: 'Honors & Badges', icon: Award, section: 'student' },
+    { id: 'tracker', label: 'Application Tracker', icon: BarChart3, section: 'student' },
+    { id: 'anonymous', label: 'Discussions Feed', icon: MessageSquare, section: 'student' },
     { id: 'messages', label: 'Direct Messages', icon: MessageSquare, section: 'student' },
     { id: 'vault', label: 'Document Vault', icon: Lock, section: 'student' },
-    { id: 'profile', label: 'Profile & Advisor', icon: UserCircle, section: 'student' },
+    { id: 'profile', label: 'Student Profile', icon: UserCircle, section: 'student' },
     { id: 'organizer', label: 'Organizer Portal', icon: PlusSquare, section: 'portal' },
-    { id: 'admin', label: 'Admin Insights', icon: Shield, section: 'portal' },
+    { id: 'admin', label: 'Admin Console', icon: Shield, section: 'portal' },
   ];
 
   const renderSidebarContent = () => (
@@ -246,30 +262,32 @@ export default function App() {
               {store.profile.displayName}
             </div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-              {store.user ? store.user.email : `${store.profile.department} · ${store.profile.year}`}
+              {store.authUser ? store.authUser.email : `${store.profile.department} · ${store.profile.year}`}
             </div>
           </div>
         </div>
 
-        {store.user ? (
+        <div className="space-y-1.5">
           <button
             type="button"
-            onClick={() => void store.signOutUser()}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+            onClick={() => store.setLoginModalOpen(true)}
+            className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 py-2 text-xs font-bold text-white transition-colors shadow-sm"
           >
-            <LogOut className="w-3.5 h-3.5" aria-hidden="true" />
-            Sign Out
+            <Shield className="w-3.5 h-3.5" aria-hidden="true" />
+            {store.authUser ? 'Switch NCET Account' : 'Sign In with @ncetmail.com'}
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void store.signInWithGoogle()}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 py-2 text-xs font-semibold text-white transition-colors"
-          >
-            <LogIn className="w-3.5 h-3.5" aria-hidden="true" />
-            Google Sign-In
-          </button>
-        )}
+
+          {store.authUser && (
+            <button
+              type="button"
+              onClick={store.logout}
+              className="w-full inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+            >
+              <LogOut className="w-3 h-3" />
+              Sign Out ({store.authUser.role})
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -443,6 +461,44 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'discovery' && (
+            <OpportunityDiscoveryView
+              opportunities={store.opportunities}
+              recommendedOpportunities={store.getRecommendedOpportunities()}
+              savedOpportunities={store.savedOpportunities}
+              applications={store.opportunityApplications}
+              onApply={store.applyToOpportunity}
+              onToggleSave={store.toggleSaveOpportunity}
+              onToggleVolunteer={store.toggleVolunteerOptin}
+              volunteerOptins={store.volunteerOptins}
+            />
+          )}
+
+          {activeTab === 'circles' && (
+            <CampusCirclesView
+              myProfile={store.myCircleProfile}
+              profiles={store.circleProfiles}
+              connections={store.circleConnections}
+              messages={store.circleMessages}
+              peerMatches={store.getPeerMatches()}
+              onSendConnection={store.sendCircleConnectionRequest}
+              onAcceptConnection={store.acceptCircleConnection}
+              onRejectConnection={store.rejectCircleConnection}
+              onUnmatchConnection={store.unmatchCircleConnection}
+              onSendMessage={store.sendCircleMessage}
+              onFlagMessage={store.flagCircleMessage}
+              onUpdateMyProfile={store.updateMyCircleProfile}
+            />
+          )}
+
+          {activeTab === 'recognition' && (
+            <RecognitionView
+              recognitions={store.recognitions}
+              leaderboard={store.getLeaderboard()}
+              currentStudentId={store.authUser?.id ?? 'user-priya-001'}
+            />
+          )}
+
           {activeTab === 'anonymous' && (
             <AnonymousConnectView
               alias={store.alias}
@@ -530,6 +586,14 @@ export default function App() {
               attendanceRecords={store.attendanceRecords}
               reports={store.reports}
               announcements={store.announcements}
+              opportunityApplications={store.opportunityApplications}
+              onUpdateApplicationStatus={store.updateOpportunityApplicationStatus}
+              externalEventImports={store.externalEventImports}
+              onReviewExternalEvent={store.reviewExternalEvent}
+              onSubmitExternalEvent={store.submitExternalEventImport}
+              recognitions={store.recognitions}
+              onAwardRecognition={store.awardRecognition}
+              volunteerOptins={store.volunteerOptins}
               onModerate={store.moderateOpportunity}
               onCreateIngested={store.createOpportunity}
               onResolveReport={store.resolveReport}
@@ -538,6 +602,13 @@ export default function App() {
           )}
         </main>
       </div>
+
+      <AuthView
+        isOpen={store.loginModalOpen}
+        onClose={() => store.setLoginModalOpen(false)}
+        onLogin={store.login}
+        currentEmail={store.authUser?.email}
+      />
 
       <OfflineIndicator />
     </div>

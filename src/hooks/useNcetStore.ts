@@ -34,6 +34,16 @@ import {
   SEED_OPPORTUNITIES,
   SEED_PEER_MATCHES,
   SEED_RECOGNITION_BADGES,
+  DEFAULT_AUTH_USER,
+  SEED_AUTH_USERS,
+  SEED_CIRCLE_PROFILES,
+  SEED_CIRCLE_CONNECTIONS,
+  SEED_CIRCLE_MESSAGES,
+  SEED_OPPORTUNITY_APPLICATIONS,
+  SEED_SAVED_OPPS,
+  SEED_RECOGNITIONS,
+  SEED_EXTERNAL_EVENTS,
+  SEED_VOLUNTEER_OPTINS,
 } from '../data/seedData';
 import type {
   ApplicationRecord,
@@ -56,11 +66,27 @@ import type {
   StudentProfile,
   StudentRecognitionBadge,
   UserRole,
+  AuthUser,
+  CircleProfile,
+  CircleConnection,
+  CircleMessage,
+  OpportunityApplication,
+  OpportunityApplicationStatus,
+  SavedOpportunity,
+  Recognition,
+  RecognitionType,
+  LeaderboardEntry,
+  EventSource,
+  ExternalEventImport,
+  VolunteerOptin,
+  FeedbackAction,
+  OpportunityFeedback,
+  ConnectionIntent,
 } from '../types/ncet';
 import { decryptPayload, encryptPayload } from '../utils/crypto';
 import { rankRecommendations } from '../utils/recommender';
 
-const CACHE_KEY = 'ncet_connect_offline_state_v2';
+const CACHE_KEY = 'ncet_connect_offline_state_v3';
 
 interface CachedState {
   profile: StudentProfile;
@@ -79,59 +105,21 @@ interface CachedState {
   badges?: StudentRecognitionBadge[];
   attendanceRecords?: AttendanceRecord[];
   reports?: CommunityReport[];
+  authUser?: AuthUser | null;
+  circleProfiles?: CircleProfile[];
+  circleConnections?: CircleConnection[];
+  circleMessages?: CircleMessage[];
+  myCircleProfile?: CircleProfile | null;
+  opportunityApplications?: OpportunityApplication[];
+  savedOpportunities?: SavedOpportunity[];
+  recognitions?: Recognition[];
+  externalEventImports?: ExternalEventImport[];
+  volunteerOptins?: VolunteerOptin[];
+  opportunityFeedback?: OpportunityFeedback[];
 }
 
 function loadCachedState(): CachedState {
-  if (typeof localStorage === 'undefined') {
-    return {
-      profile: DEFAULT_STUDENT_PROFILE,
-      opportunities: SEED_OPPORTUNITIES,
-      applications: SEED_APPLICATIONS,
-      events: SEED_EVENTS,
-      notifications: SEED_NOTIFICATIONS,
-      messages: [],
-      vaultDocs: [],
-      alias: DEFAULT_COMMUNITY_ALIAS,
-      posts: SEED_COMMUNITY_POSTS,
-      polls: SEED_COMMUNITY_POLLS,
-      peerMatches: SEED_PEER_MATCHES,
-      groups: SEED_LEARNING_GROUPS,
-      announcements: SEED_ANNOUNCEMENTS,
-      badges: SEED_RECOGNITION_BADGES,
-      attendanceRecords: SEED_ATTENDANCE_RECORDS,
-      reports: SEED_COMMUNITY_REPORTS,
-    };
-  }
-  try {
-    const raw = localStorage.getItem(CACHE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<CachedState>;
-      return {
-        profile: parsed.profile ?? DEFAULT_STUDENT_PROFILE,
-        opportunities:
-          parsed.opportunities && parsed.opportunities.length > 0
-            ? parsed.opportunities
-            : SEED_OPPORTUNITIES,
-        applications: parsed.applications ?? SEED_APPLICATIONS,
-        events: parsed.events ?? SEED_EVENTS,
-        notifications: parsed.notifications ?? SEED_NOTIFICATIONS,
-        messages: parsed.messages ?? [],
-        vaultDocs: parsed.vaultDocs ?? [],
-        alias: parsed.alias ?? DEFAULT_COMMUNITY_ALIAS,
-        posts: parsed.posts && parsed.posts.length > 0 ? parsed.posts : SEED_COMMUNITY_POSTS,
-        polls: parsed.polls && parsed.polls.length > 0 ? parsed.polls : SEED_COMMUNITY_POLLS,
-        peerMatches: parsed.peerMatches && parsed.peerMatches.length > 0 ? parsed.peerMatches : SEED_PEER_MATCHES,
-        groups: parsed.groups && parsed.groups.length > 0 ? parsed.groups : SEED_LEARNING_GROUPS,
-        announcements: parsed.announcements && parsed.announcements.length > 0 ? parsed.announcements : SEED_ANNOUNCEMENTS,
-        badges: parsed.badges && parsed.badges.length > 0 ? parsed.badges : SEED_RECOGNITION_BADGES,
-        attendanceRecords: parsed.attendanceRecords && parsed.attendanceRecords.length > 0 ? parsed.attendanceRecords : SEED_ATTENDANCE_RECORDS,
-        reports: parsed.reports && parsed.reports.length > 0 ? parsed.reports : SEED_COMMUNITY_REPORTS,
-      };
-    }
-  } catch {
-    // Fallback to clean seed
-  }
-  return {
+  const fallback: CachedState = {
     profile: DEFAULT_STUDENT_PROFILE,
     opportunities: SEED_OPPORTUNITIES,
     applications: SEED_APPLICATIONS,
@@ -148,7 +136,63 @@ function loadCachedState(): CachedState {
     badges: SEED_RECOGNITION_BADGES,
     attendanceRecords: SEED_ATTENDANCE_RECORDS,
     reports: SEED_COMMUNITY_REPORTS,
+    authUser: DEFAULT_AUTH_USER,
+    circleProfiles: SEED_CIRCLE_PROFILES,
+    circleConnections: SEED_CIRCLE_CONNECTIONS,
+    circleMessages: SEED_CIRCLE_MESSAGES,
+    myCircleProfile: SEED_CIRCLE_PROFILES[0],
+    opportunityApplications: SEED_OPPORTUNITY_APPLICATIONS,
+    savedOpportunities: SEED_SAVED_OPPS,
+    recognitions: SEED_RECOGNITIONS,
+    externalEventImports: SEED_EXTERNAL_EVENTS,
+    volunteerOptins: SEED_VOLUNTEER_OPTINS,
+    opportunityFeedback: [],
   };
+
+  if (typeof localStorage === 'undefined') {
+    return fallback;
+  }
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<CachedState>;
+      return {
+        profile: parsed.profile ?? fallback.profile,
+        opportunities:
+          parsed.opportunities && parsed.opportunities.length > 0
+            ? parsed.opportunities
+            : fallback.opportunities,
+        applications: parsed.applications ?? fallback.applications,
+        events: parsed.events ?? fallback.events,
+        notifications: parsed.notifications ?? fallback.notifications,
+        messages: parsed.messages ?? [],
+        vaultDocs: parsed.vaultDocs ?? [],
+        alias: parsed.alias ?? fallback.alias,
+        posts: parsed.posts && parsed.posts.length > 0 ? parsed.posts : fallback.posts,
+        polls: parsed.polls && parsed.polls.length > 0 ? parsed.polls : fallback.polls,
+        peerMatches: parsed.peerMatches && parsed.peerMatches.length > 0 ? parsed.peerMatches : fallback.peerMatches,
+        groups: parsed.groups && parsed.groups.length > 0 ? parsed.groups : fallback.groups,
+        announcements: parsed.announcements && parsed.announcements.length > 0 ? parsed.announcements : fallback.announcements,
+        badges: parsed.badges && parsed.badges.length > 0 ? parsed.badges : fallback.badges,
+        attendanceRecords: parsed.attendanceRecords && parsed.attendanceRecords.length > 0 ? parsed.attendanceRecords : fallback.attendanceRecords,
+        reports: parsed.reports && parsed.reports.length > 0 ? parsed.reports : fallback.reports,
+        authUser: parsed.authUser !== undefined ? parsed.authUser : fallback.authUser,
+        circleProfiles: parsed.circleProfiles && parsed.circleProfiles.length > 0 ? parsed.circleProfiles : fallback.circleProfiles,
+        circleConnections: parsed.circleConnections && parsed.circleConnections.length > 0 ? parsed.circleConnections : fallback.circleConnections,
+        circleMessages: parsed.circleMessages && parsed.circleMessages.length > 0 ? parsed.circleMessages : fallback.circleMessages,
+        myCircleProfile: parsed.myCircleProfile ?? fallback.myCircleProfile,
+        opportunityApplications: parsed.opportunityApplications && parsed.opportunityApplications.length > 0 ? parsed.opportunityApplications : fallback.opportunityApplications,
+        savedOpportunities: parsed.savedOpportunities && parsed.savedOpportunities.length > 0 ? parsed.savedOpportunities : fallback.savedOpportunities,
+        recognitions: parsed.recognitions && parsed.recognitions.length > 0 ? parsed.recognitions : fallback.recognitions,
+        externalEventImports: parsed.externalEventImports && parsed.externalEventImports.length > 0 ? parsed.externalEventImports : fallback.externalEventImports,
+        volunteerOptins: parsed.volunteerOptins && parsed.volunteerOptins.length > 0 ? parsed.volunteerOptins : fallback.volunteerOptins,
+        opportunityFeedback: parsed.opportunityFeedback ?? [],
+      };
+    }
+  } catch {
+    // Fallback to clean seed
+  }
+  return fallback;
 }
 
 export function useNcetStore() {
@@ -175,6 +219,27 @@ export function useNcetStore() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(initial.attendanceRecords ?? SEED_ATTENDANCE_RECORDS);
   const [reports, setReports] = useState<CommunityReport[]>(initial.reports ?? SEED_COMMUNITY_REPORTS);
 
+  // New modules state
+  const [authUser, setAuthUser] = useState<AuthUser | null>(initial.authUser ?? DEFAULT_AUTH_USER);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+  const [circleProfiles, setCircleProfiles] = useState<CircleProfile[]>(initial.circleProfiles ?? SEED_CIRCLE_PROFILES);
+  const [circleConnections, setCircleConnections] = useState<CircleConnection[]>(initial.circleConnections ?? SEED_CIRCLE_CONNECTIONS);
+  const [circleMessages, setCircleMessages] = useState<CircleMessage[]>(initial.circleMessages ?? SEED_CIRCLE_MESSAGES);
+  const [myCircleProfile, setMyCircleProfile] = useState<CircleProfile | null>(initial.myCircleProfile ?? SEED_CIRCLE_PROFILES[0]);
+  const [opportunityApplications, setOpportunityApplications] = useState<OpportunityApplication[]>(initial.opportunityApplications ?? SEED_OPPORTUNITY_APPLICATIONS);
+  const [savedOpportunities, setSavedOpportunities] = useState<SavedOpportunity[]>(initial.savedOpportunities ?? SEED_SAVED_OPPS);
+  const [recognitions, setRecognitions] = useState<Recognition[]>(initial.recognitions ?? SEED_RECOGNITIONS);
+  const [externalEventImports, setExternalEventImports] = useState<ExternalEventImport[]>(initial.externalEventImports ?? SEED_EXTERNAL_EVENTS);
+  const [volunteerOptins, setVolunteerOptins] = useState<VolunteerOptin[]>(initial.volunteerOptins ?? SEED_VOLUNTEER_OPTINS);
+  const [opportunityFeedback, setOpportunityFeedback] = useState<OpportunityFeedback[]>(initial.opportunityFeedback ?? []);
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [opportunityTypeFilter, setOpportunityTypeFilter] = useState('All');
+  const [locationFilter, setLocationFilter] = useState('All');
+  const [departmentFilter, setDepartmentFilter] = useState('All');
+  const [modeFilter, setModeFilter] = useState('All');
+
   // Persist offline cache for PWA / multi-device continuity
   useEffect(() => {
     try {
@@ -197,6 +262,17 @@ export function useNcetStore() {
           badges,
           attendanceRecords,
           reports,
+          authUser,
+          circleProfiles,
+          circleConnections,
+          circleMessages,
+          myCircleProfile,
+          opportunityApplications,
+          savedOpportunities,
+          recognitions,
+          externalEventImports,
+          volunteerOptins,
+          opportunityFeedback,
         })
       );
     } catch {
@@ -1210,6 +1286,511 @@ export function useNcetStore() {
     [applications, events, opportunities, profile]
   );
 
+  // ============================================================
+  // FINAL IMPLEMENTATION — ACTIONS & COMPUTED HELPERS
+  // ============================================================
+
+  const currentStudentId = authUser?.id ?? 'user-priya-001';
+
+  const login = useCallback(
+    (email: string, targetRole: UserRole = 'student') => {
+      const existing = SEED_AUTH_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase());
+      const userToSet: AuthUser = existing ?? {
+        id: `user-${Date.now()}`,
+        email,
+        role: targetRole,
+        isVerified: email.toLowerCase().endsWith('@ncetmail.com'),
+        isActive: true,
+        createdAt: new Date().toISOString(),
+      };
+      setAuthUser(userToSet);
+      setRole(userToSet.role);
+      setLoginModalOpen(false);
+      addNotification(
+        'Signed In Successfully',
+        `Welcome to NCET Connect (${userToSet.email} • ${userToSet.role}).`,
+        'in_app'
+      );
+    },
+    [addNotification]
+  );
+
+  const logout = useCallback(() => {
+    setAuthUser(null);
+    setRole('student');
+    setLoginModalOpen(false);
+    addNotification('Signed Out', 'You have been signed out of NCET Connect.', 'in_app');
+  }, [addNotification]);
+
+  const applyToOpportunity = useCallback(
+    (opportunityId: string, notes?: string) => {
+      setOpportunityApplications((prev) => {
+        const existing = prev.find(
+          (a) => a.opportunityId === opportunityId && a.studentId === currentStudentId
+        );
+        if (existing) {
+          addNotification('Already Applied', 'You have already submitted an application for this opportunity.', 'in_app');
+          return prev;
+        }
+        const newApp: OpportunityApplication = {
+          id: `oppapp-${Date.now()}`,
+          studentId: currentStudentId,
+          opportunityId,
+          status: 'applied',
+          appliedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          notes: notes ?? 'Applied via NCET Connect Student Portal.',
+        };
+        addNotification('Application Submitted', 'Your application is now under review by the organizer.', 'in_app');
+        return [newApp, ...prev];
+      });
+
+      // Increment registered count on opportunity
+      setOpportunities((prev) =>
+        prev.map((opp) =>
+          opp.id === opportunityId
+            ? { ...opp, registeredCount: (opp.registeredCount ?? 0) + 1 }
+            : opp
+        )
+      );
+    },
+    [addNotification, currentStudentId]
+  );
+
+  const updateOpportunityApplicationStatus = useCallback(
+    (applicationId: string, status: OpportunityApplicationStatus) => {
+      setOpportunityApplications((prev) =>
+        prev.map((app) =>
+          app.id === applicationId
+            ? { ...app, status, updatedAt: new Date().toISOString() }
+            : app
+        )
+      );
+      addNotification('Application Updated', `Application ${applicationId} status set to ${status}.`, 'in_app');
+    },
+    [addNotification]
+  );
+
+  const withdrawApplication = useCallback(
+    (applicationId: string) => {
+      setOpportunityApplications((prev) =>
+        prev.map((app) =>
+          app.id === applicationId
+            ? { ...app, status: 'withdrawn', updatedAt: new Date().toISOString() }
+            : app
+        )
+      );
+      addNotification('Application Withdrawn', 'Your application has been safely withdrawn.', 'in_app');
+    },
+    [addNotification]
+  );
+
+  const toggleSaveOpportunity = useCallback(
+    (opportunityId: string) => {
+      setSavedOpportunities((prev) => {
+        const idx = prev.findIndex(
+          (s) => s.opportunityId === opportunityId && s.studentId === currentStudentId
+        );
+        if (idx >= 0) {
+          addNotification('Opportunity Unsaved', 'Removed from your bookmarks.', 'in_app');
+          return prev.filter((_, i) => i !== idx);
+        } else {
+          addNotification('Opportunity Bookmarked', 'Saved to your opportunity collection.', 'in_app');
+          return [
+            {
+              id: `saved-${Date.now()}`,
+              studentId: currentStudentId,
+              opportunityId,
+              savedAt: new Date().toISOString(),
+            },
+            ...prev,
+          ];
+        }
+      });
+    },
+    [addNotification, currentStudentId]
+  );
+
+  const isOpportunitySaved = useCallback(
+    (opportunityId: string) => {
+      return savedOpportunities.some(
+        (s) => s.opportunityId === opportunityId && s.studentId === currentStudentId
+      );
+    },
+    [currentStudentId, savedOpportunities]
+  );
+
+  const sendCircleConnectionRequest = useCallback(
+    (receiverCircleProfileId: string) => {
+      const myId = myCircleProfile?.id ?? 'circle-priya-001';
+      setCircleConnections((prev) => {
+        const exists = prev.find(
+          (c) =>
+            (c.senderId === myId && c.receiverId === receiverCircleProfileId) ||
+            (c.senderId === receiverCircleProfileId && c.receiverId === myId)
+        );
+        if (exists) {
+          addNotification('Connection Exists', 'A request with this peer is already active.', 'in_app');
+          return prev;
+        }
+        const newConn: CircleConnection = {
+          id: `cconn-${Date.now()}`,
+          senderId: myId,
+          receiverId: receiverCircleProfileId,
+          status: 'pending',
+          identityRevealed: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        addNotification('Connection Sent', 'Anonymous connect invitation dispatched.', 'in_app');
+        return [newConn, ...prev];
+      });
+    },
+    [addNotification, myCircleProfile]
+  );
+
+  const acceptCircleConnection = useCallback(
+    (connectionId: string) => {
+      setCircleConnections((prev) =>
+        prev.map((c) =>
+          c.id === connectionId
+            ? { ...c, status: 'accepted', updatedAt: new Date().toISOString() }
+            : c
+        )
+      );
+      addNotification('Connection Accepted', 'You can now chat anonymously in Campus Circles.', 'in_app');
+    },
+    [addNotification]
+  );
+
+  const rejectCircleConnection = useCallback(
+    (connectionId: string) => {
+      setCircleConnections((prev) =>
+        prev.map((c) =>
+          c.id === connectionId
+            ? { ...c, status: 'rejected', updatedAt: new Date().toISOString() }
+            : c
+        )
+      );
+      addNotification('Connection Declined', 'Request has been declined.', 'in_app');
+    },
+    [addNotification]
+  );
+
+  const unmatchCircleConnection = useCallback(
+    (connectionId: string) => {
+      setCircleConnections((prev) =>
+        prev.map((c) =>
+          c.id === connectionId
+            ? { ...c, status: 'unmatched', updatedAt: new Date().toISOString() }
+            : c
+        )
+      );
+      addNotification('Peer Unmatched', 'Connection closed.', 'in_app');
+    },
+    [addNotification]
+  );
+
+  const sendCircleMessage = useCallback(
+    (connectionId: string, message: string) => {
+      const myId = myCircleProfile?.id ?? 'circle-priya-001';
+      const newMsg: CircleMessage = {
+        id: `cmsg-${Date.now()}`,
+        connectionId,
+        senderId: myId,
+        message,
+        isFlagged: false,
+        createdAt: new Date().toISOString(),
+      };
+      setCircleMessages((prev) => [...prev, newMsg]);
+    },
+    [myCircleProfile]
+  );
+
+  const flagCircleMessage = useCallback(
+    (messageId: string) => {
+      setCircleMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, isFlagged: true } : m))
+      );
+      addNotification('Message Flagged', 'Our moderation team will review this interaction.', 'in_app');
+    },
+    [addNotification]
+  );
+
+  const updateMyCircleProfile = useCallback(
+    (updates: Partial<CircleProfile>) => {
+      setMyCircleProfile((prev) => {
+        if (!prev) return null;
+        const updated = { ...prev, ...updates };
+        setCircleProfiles((list) => list.map((p) => (p.id === prev.id ? updated : p)));
+        return updated;
+      });
+      addNotification('Anonymous Profile Updated', 'Your Campus Circle identity preferences are saved.', 'in_app');
+    },
+    [addNotification]
+  );
+
+  const submitExternalEventImport = useCallback(
+    (event: Omit<ExternalEventImport, 'id' | 'importedAt' | 'status'>) => {
+      const newImport: ExternalEventImport = {
+        ...event,
+        id: `ext-${Date.now()}`,
+        status: 'pending',
+        importedAt: new Date().toISOString(),
+      };
+      setExternalEventImports((prev) => [newImport, ...prev]);
+      addNotification('Event Import Submitted', `"${event.title}" queued for admin review.`, 'in_app');
+    },
+    [addNotification]
+  );
+
+  const reviewExternalEvent = useCallback(
+    (eventId: string, decision: 'approved' | 'rejected') => {
+      setExternalEventImports((prev) =>
+        prev.map((ev) => (ev.id === eventId ? { ...ev, status: decision } : ev))
+      );
+      addNotification('Event Reviewed', `External event ${decision}.`, 'in_app');
+    },
+    [addNotification]
+  );
+
+  const toggleVolunteerOptin = useCallback(
+    (opportunityId: string) => {
+      setVolunteerOptins((prev) => {
+        const exists = prev.some(
+          (v) => v.opportunityId === opportunityId && v.studentId === currentStudentId
+        );
+        if (exists) {
+          addNotification('Volunteer Opt-Out', 'Removed from volunteer roster.', 'in_app');
+          return prev.filter(
+            (v) => !(v.opportunityId === opportunityId && v.studentId === currentStudentId)
+          );
+        } else {
+          addNotification('Volunteer Registered!', 'Thank you for volunteering! Organizers have been notified.', 'in_app');
+          return [
+            {
+              id: `vol-${Date.now()}`,
+              studentId: currentStudentId,
+              opportunityId,
+              skills: profile.skills,
+              availability: ['Weekends'],
+              optedAt: new Date().toISOString(),
+            },
+            ...prev,
+          ];
+        }
+      });
+    },
+    [addNotification, currentStudentId, profile.skills]
+  );
+
+  const trackFeedback = useCallback(
+    (opportunityId: string, action: FeedbackAction) => {
+      setOpportunityFeedback((prev) => [
+        {
+          id: `fb-${Date.now()}`,
+          studentId: currentStudentId,
+          opportunityId,
+          action,
+          createdAt: new Date().toISOString(),
+        },
+        ...prev,
+      ]);
+    },
+    [currentStudentId]
+  );
+
+  const awardRecognition = useCallback(
+    (studentId: string, type: RecognitionType, points: number, reason: string) => {
+      const newRec: Recognition = {
+        id: `rec-${Date.now()}`,
+        studentId,
+        recognitionType: type,
+        points,
+        awardedAt: new Date().toISOString(),
+        reason,
+      };
+      setRecognitions((prev) => [newRec, ...prev]);
+      addNotification('Recognition Awarded', `+${points} pts (${type}) awarded to student.`, 'in_app');
+    },
+    [addNotification]
+  );
+
+  const getLeaderboard = useCallback((): LeaderboardEntry[] => {
+    const studentMap = new Map<string, { totalPoints: number; badges: Set<RecognitionType> }>();
+    recognitions.forEach((r) => {
+      const cur = studentMap.get(r.studentId) ?? { totalPoints: 0, badges: new Set<RecognitionType>() };
+      cur.totalPoints += r.points;
+      cur.badges.add(r.recognitionType);
+      studentMap.set(r.studentId, cur);
+    });
+
+    const entries: LeaderboardEntry[] = [];
+    studentMap.forEach((val, sId) => {
+      const userObj = SEED_AUTH_USERS.find((u) => u.id === sId);
+      const circleObj = circleProfiles.find((c) => c.userId === sId);
+      entries.push({
+        studentId: sId,
+        anonymousName: circleObj?.anonymousName,
+        displayName: sId === currentStudentId ? `${profile.displayName} (You)` : userObj?.email.split('@')[0] ?? `Student #${sId.slice(-3)}`,
+        department: circleObj?.department ?? 'CSE',
+        totalPoints: val.totalPoints,
+        badges: Array.from(val.badges),
+        rank: 0,
+      });
+    });
+
+    entries.sort((a, b) => b.totalPoints - a.totalPoints);
+    entries.forEach((e, idx) => {
+      e.rank = idx + 1;
+    });
+
+    return entries;
+  }, [circleProfiles, currentStudentId, profile.displayName, recognitions]);
+
+  const getMyApplications = useCallback((): OpportunityApplication[] => {
+    return opportunityApplications.filter((a) => a.studentId === currentStudentId);
+  }, [currentStudentId, opportunityApplications]);
+
+  const getMySavedOpportunities = useCallback((): SavedOpportunity[] => {
+    return savedOpportunities.filter((s) => s.studentId === currentStudentId);
+  }, [currentStudentId, savedOpportunities]);
+
+  const getFilteredOpportunities = useCallback((): Opportunity[] => {
+    return opportunities.filter((opp) => {
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesTitle = opp.title.toLowerCase().includes(q);
+        const matchesDesc = opp.description.toLowerCase().includes(q);
+        const matchesOrg = opp.organization.toLowerCase().includes(q);
+        const matchesSkills = (opp.tags || []).some((s: string) => s.toLowerCase().includes(q));
+        if (!matchesTitle && !matchesDesc && !matchesOrg && !matchesSkills) return false;
+      }
+      if (opportunityTypeFilter !== 'All' && opp.type !== opportunityTypeFilter) {
+        return false;
+      }
+      if (locationFilter !== 'All') {
+        if (locationFilter === 'On campus' && !opp.venue?.toLowerCase().includes('campus') && opp.isExternal) return false;
+        if (locationFilter === 'Bengaluru' && !opp.venue?.toLowerCase().includes('bengaluru') && !opp.venue?.toLowerCase().includes('blr')) return false;
+        if (locationFilter === 'Remote / Online' && opp.venue?.toLowerCase().includes('in-person')) return false;
+      }
+      if (departmentFilter !== 'All') {
+        const depts = opp.eligibleDepartments || opp.departments || [];
+        if (depts.length > 0 && !depts.includes(departmentFilter)) {
+          return false;
+        }
+      }
+      if (modeFilter !== 'All') {
+        if (opp.mode !== modeFilter) return false;
+      }
+      return true;
+    });
+  }, [departmentFilter, locationFilter, modeFilter, opportunities, opportunityTypeFilter, searchQuery]);
+
+  const getPeerMatches = useCallback((): Array<CircleProfile & { matchScore: number; explanation: string }> => {
+    const myProfile = myCircleProfile;
+    if (!myProfile) return [];
+
+    return circleProfiles
+      .filter((p) => p.id !== myProfile.id && p.isActive)
+      .map((peer) => {
+        // Interest overlap (Jaccard)
+        const myInterests = new Set(myProfile.interests);
+        const sharedInterests = peer.interests.filter((i) => myInterests.has(i));
+        const unionInterests = new Set([...myProfile.interests, ...peer.interests]);
+        const interestOverlap = unionInterests.size > 0 ? sharedInterests.length / unionInterests.size : 0;
+
+        // Skill complement / overlap
+        const mySkills = new Set(myProfile.skills);
+        const sharedSkills = peer.skills.filter((s) => mySkills.has(s));
+        const skillComplement = Math.min(1, (sharedSkills.length * 0.4) + (peer.skills.length * 0.2));
+
+        // Intent match
+        const intentMatch = myProfile.connectionIntent === peer.connectionIntent ? 1 : 0.4;
+
+        // Availability match
+        const myAvail = new Set(myProfile.availability);
+        const sharedAvail = peer.availability.filter((a) => myAvail.has(a));
+        const availabilityMatch = sharedAvail.length > 0 ? 1 : 0.3;
+
+        // Formula: 0.30 Interest + 0.25 Skill + 0.20 Intent + 0.15 Availability + 0.10 Activity
+        const score = Math.round(
+          (0.30 * interestOverlap +
+            0.25 * skillComplement +
+            0.20 * intentMatch +
+            0.15 * availabilityMatch +
+            0.10 * (peer.profileScore / 100)) *
+            100
+        );
+
+        let explanation = '';
+        if (sharedInterests.length > 0 && myProfile.connectionIntent === peer.connectionIntent) {
+          explanation = `Both seek a ${myProfile.connectionIntent} and share interest in ${sharedInterests.slice(0, 2).join(', ')}.`;
+        } else if (sharedInterests.length > 0) {
+          explanation = `Strong synergy in ${sharedInterests.slice(0, 2).join(', ')} with complementary tech skills.`;
+        } else {
+          explanation = `Compatible weekend availability and cross-functional ${peer.department} background.`;
+        }
+
+        return {
+          ...peer,
+          matchScore: Math.min(99, Math.max(65, score)),
+          explanation,
+        };
+      })
+      .sort((a, b) => b.matchScore - a.matchScore);
+  }, [circleProfiles, myCircleProfile]);
+
+  const getRecommendedOpportunities = useCallback((): Array<Opportunity & { recommendScore: number; explanation: string }> => {
+    return opportunities
+      .filter((opp) => opp.approvalStatus === 'published' || opp.approvalStatus === undefined)
+      .map((opp) => {
+        // Skill fit
+        const mySkills = new Set(profile.skills.map((s) => s.toLowerCase()));
+        const tags = opp.tags || [];
+        const matchedSkills = tags.filter((s: string) => mySkills.has(s.toLowerCase()));
+        const skillFit = tags.length > 0 ? matchedSkills.length / tags.length : 0.5;
+
+        // Interest fit
+        const myInterests = new Set(profile.interests.map((i) => i.toLowerCase()));
+        const matchedInterests = tags.filter((i: string) => myInterests.has(i.toLowerCase()));
+        const interestFit = tags.length > 0 ? matchedInterests.length / tags.length : 0.5;
+
+        // Department fit
+        const depts = opp.eligibleDepartments || opp.departments || [];
+        const deptFit = depts.length === 0 || depts.includes(profile.department) ? 1 : 0.4;
+
+        // Score calculation: 0.30 Skill + 0.20 Interest + 0.15 Dept + 0.15 Availability + 0.10 Location + 0.10 Urgency
+        const score = Math.round(
+          (0.30 * skillFit +
+            0.20 * interestFit +
+            0.15 * deptFit +
+            0.15 * 0.8 +
+            0.10 * (opp.isExternal ? 0.85 : 1.0) +
+            0.10 * 0.9) *
+            100
+        );
+
+        let explanation = '';
+        if (matchedSkills.length > 0 && matchedInterests.length > 0) {
+          explanation = `Matches your ${matchedSkills.slice(0, 2).join(', ')} skills and ${matchedInterests[0]} interest.`;
+        } else if (matchedSkills.length > 0) {
+          explanation = `Matches required skills: ${matchedSkills.slice(0, 2).join(', ')}.`;
+        } else if (matchedInterests.length > 0) {
+          explanation = `Aligns with your interest in ${matchedInterests.slice(0, 2).join(', ')}.`;
+        } else {
+          explanation = `High demand opportunity for ${profile.department} students.`;
+        }
+
+        return {
+          ...opp,
+          recommendScore: Math.min(99, Math.max(70, score)),
+          explanation,
+        };
+      })
+      .sort((a, b) => b.recommendScore - a.recommendScore);
+  }, [opportunities, profile.department, profile.interests, profile.skills]);
+
   return {
     user,
     authReady,
@@ -1269,5 +1850,54 @@ export function useNcetStore() {
     resolveReport,
     toggleInterestInExternal,
     reviewOpportunity,
+    // Final Implementation additions
+    authUser,
+    loginModalOpen,
+    setLoginModalOpen,
+    login,
+    logout,
+    circleProfiles,
+    circleConnections,
+    circleMessages,
+    myCircleProfile,
+    opportunityApplications,
+    savedOpportunities,
+    recognitions,
+    externalEventImports,
+    volunteerOptins,
+    opportunityFeedback,
+    searchQuery,
+    setSearchQuery,
+    opportunityTypeFilter,
+    setOpportunityTypeFilter,
+    locationFilter,
+    setLocationFilter,
+    departmentFilter,
+    setDepartmentFilter,
+    modeFilter,
+    setModeFilter,
+    applyToOpportunity,
+    updateOpportunityApplicationStatus,
+    withdrawApplication,
+    toggleSaveOpportunity,
+    isOpportunitySaved,
+    sendCircleConnectionRequest,
+    acceptCircleConnection,
+    rejectCircleConnection,
+    unmatchCircleConnection,
+    sendCircleMessage,
+    flagCircleMessage,
+    updateMyCircleProfile,
+    submitExternalEventImport,
+    reviewExternalEvent,
+    toggleVolunteerOptin,
+    trackFeedback,
+    awardRecognition,
+    getLeaderboard,
+    getMyApplications,
+    getMySavedOpportunities,
+    getFilteredOpportunities,
+    getPeerMatches,
+    getRecommendedOpportunities,
   };
 }

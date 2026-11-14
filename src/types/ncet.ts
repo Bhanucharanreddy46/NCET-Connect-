@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'organizer' | 'admin';
+export type UserRole = 'student' | 'organizer' | 'club_organizer' | 'faculty' | 'startup' | 'ngo' | 'admin';
 
 export type OpportunityType =
   | 'Internship'
@@ -86,6 +86,15 @@ export interface Opportunity {
   approvalStatus?: 'draft' | 'pending_approval' | 'published' | 'rejected';
   rejectionReason?: string;
   interestedPeerCount?: number;
+  source?: EventSource;
+  sourceUrl?: string;
+  eligibleDepartments?: string[];
+  compensation?: string;
+  numberOfOpenings?: number;
+  registrationDeadline?: string;
+  organizerType?: UserRole;
+  locationFilter?: 'On campus' | 'Bengaluru' | 'Remote / Online' | 'Hybrid' | 'Near me';
+  volunteerCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -309,4 +318,202 @@ export interface StudentRecognitionBadge {
   unlocked: boolean;
   unlockedAt?: string;
   category: 'attendance' | 'community' | 'hackathon' | 'leadership';
+}
+
+
+// ============================================================
+// FINAL IMPLEMENTATION — NEW TYPES
+// ============================================================
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: UserRole;
+  isVerified: boolean;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export type ConnectionIntent =
+  | 'Hackathon teammate'
+  | 'Project partner'
+  | 'Study group'
+  | 'Volunteer opportunity'
+  | 'Internship preparation'
+  | 'Club collaboration'
+  | 'Mentorship'
+  | 'Open-source contribution'
+  | 'Community project';
+
+export interface CircleProfile {
+  id: string;
+  userId: string;
+  anonymousName: string;
+  department: string;
+  academicYear: string;
+  skills: string[];
+  interests: string[];
+  availability: string[];
+  connectionIntent: ConnectionIntent;
+  bio: string;
+  profileScore: number;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface CircleConnection {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  status: 'pending' | 'accepted' | 'rejected' | 'unmatched';
+  identityRevealed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CircleMessage {
+  id: string;
+  connectionId: string;
+  senderId: string;
+  message: string;
+  isFlagged: boolean;
+  createdAt: string;
+}
+
+/** Status values used by OpportunityApplication (distinct from the legacy ApplicationStatus) */
+export type OpportunityApplicationStatus =
+  | 'applied'
+  | 'shortlisted'
+  | 'selected'
+  | 'rejected'
+  | 'withdrawn'
+  | 'completed';
+
+export interface OpportunityApplication {
+  id: string;
+  studentId: string;
+  opportunityId: string;
+  status: OpportunityApplicationStatus;
+  appliedAt: string;
+  updatedAt: string;
+  notes?: string;
+}
+
+export interface SavedOpportunity {
+  id: string;
+  studentId: string;
+  opportunityId: string;
+  savedAt: string;
+}
+
+export type RecognitionType =
+  | 'Active Learner'
+  | 'Hackathon Participant'
+  | 'Hackathon Winner'
+  | 'Club Contributor'
+  | 'Open-Source Contributor'
+  | 'Community Volunteer'
+  | 'Event Organizer'
+  | 'Campus Ambassador'
+  | 'Research Contributor'
+  | 'Mentor'
+  | 'Innovation Champion';
+
+export interface Recognition {
+  id: string;
+  studentId: string;
+  recognitionType: RecognitionType;
+  points: number;
+  awardedAt: string;
+  reason?: string;
+}
+
+export interface LeaderboardEntry {
+  studentId: string;
+  anonymousName?: string;
+  displayName: string;
+  department: string;
+  totalPoints: number;
+  badges: RecognitionType[];
+  rank: number;
+}
+
+export type EventSource =
+  | 'NCET Club'
+  | 'NCET Department'
+  | 'Faculty'
+  | 'Startup'
+  | 'NGO'
+  | 'Luma'
+  | 'Meetup'
+  | 'Devfolio'
+  | 'Unstop'
+  | 'AllEvents'
+  | 'Hack2skill'
+  | 'Google Student Ambassador'
+  | 'Microsoft Student Ambassador'
+  | 'IBM Community'
+  | 'AWS Community'
+  | 'GitHub'
+  | 'GDG Bangalore'
+  | 'HasGeek';
+
+export interface ExternalEventImport {
+  id: string;
+  source: EventSource;
+  sourceUrl?: string;
+  title: string;
+  description: string;
+  eventDate: string;
+  location: string;
+  mode: 'online' | 'offline' | 'hybrid';
+  organizer: string;
+  registrationUrl?: string;
+  category: string;
+  skills: string[];
+  status: 'pending' | 'approved' | 'rejected';
+  importedAt: string;
+}
+
+export interface RecommendationScore {
+  opportunityId: string;
+  totalScore: number;
+  skillFit: number;
+  interestFit: number;
+  availabilityFit: number;
+  goalFit: number;
+  locationFit: number;
+  impactFit: number;
+  urgencyFit: number;
+  explanation: string;
+}
+
+export interface PeerMatchScore {
+  circleProfileId: string;
+  totalScore: number;
+  interestOverlap: number;
+  skillComplement: number;
+  intentMatch: number;
+  availabilityMatch: number;
+  activityScore: number;
+  explanation: string;
+}
+
+export interface VolunteerOptin {
+  id: string;
+  studentId: string;
+  opportunityId: string;
+  skills: string[];
+  availability: string[];
+  optedAt: string;
+}
+
+export type FeedbackAction = 'viewed' | 'clicked' | 'saved' | 'applied' | 'dismissed' | 'registered' | 'attended';
+
+export interface OpportunityFeedback {
+  id: string;
+  studentId: string;
+  opportunityId: string;
+  action: FeedbackAction;
+  createdAt: string;
 }
