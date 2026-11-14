@@ -1,0 +1,6 @@
+{
+  "name": "NCET CONNECT",
+  "description": "NCET CONNECT — Student networking, explainable internship discovery, application analytics, encrypted document vault, and campus organizer portal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

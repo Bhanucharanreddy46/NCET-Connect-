@@ -1,0 +1,182 @@
+{
+  "entities": {
+    "UserAccount": {
+      "title": "UserAccount",
+      "description": "Private PII and security preferences for an authenticated NCET CONNECT user.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["student", "organizer"] },
+        "biometricEnabled": { "type": "boolean" },
+        "emailDigestEnabled": { "type": "boolean" },
+        "pushRemindersEnabled": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "role", "createdAt", "updatedAt"]
+    },
+    "PublicProfile": {
+      "title": "PublicProfile",
+      "description": "Non-PII campus profile used for student networking, skill matching, and organizer attribution.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "department": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "year": { "type": "string", "minLength": 1, "maxLength": 30 },
+        "skills": { "type": "array" },
+        "interests": { "type": "array" },
+        "availability": { "type": "array" },
+        "careerGoals": { "type": "array" },
+        "bio": { "type": "string", "maxLength": 500 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "department", "year", "skills", "interests", "availability", "careerGoals", "updatedAt"]
+    },
+    "Opportunity": {
+      "title": "Opportunity",
+      "description": "Normalized campus, career, or community opportunity.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "organizerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "organization": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "type": { "type": "string", "enum": ["Internship", "Hackathon", "Workshop", "Meetup", "Research", "Campus Drive"] },
+        "domain": { "type": "string", "maxLength": 80 },
+        "industry": { "type": "string", "maxLength": 80 },
+        "mode": { "type": "string", "enum": ["Remote", "Hybrid", "On-Campus", "Offline"] },
+        "departments": { "type": "array" },
+        "eligibleYears": { "type": "array" },
+        "tags": { "type": "array" },
+        "availabilitySlot": { "type": "string", "maxLength": 60 },
+        "goalMatch": { "type": "string", "maxLength": 80 },
+        "deadline": { "type": "string", "maxLength": 40 },
+        "sourceGroup": { "type": "string", "enum": ["Campus", "Career", "Community"] },
+        "sourceName": { "type": "string", "maxLength": 60 },
+        "status": { "type": "string", "enum": ["published", "pending_moderation", "archived"] },
+        "description": { "type": "string", "maxLength": 3000 },
+        "stipendOrPrize": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "organizerId", "title", "organization", "type", "domain", "mode", "departments", "tags", "deadline", "sourceGroup", "status", "createdAt", "updatedAt"]
+    },
+    "ApplicationRecord": {
+      "title": "ApplicationRecord",
+      "description": "Student saved item, registration, application status, and interview schedule.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "studentId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "organizerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "opportunityId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "opportunityTitle": { "type": "string", "maxLength": 160 },
+        "organization": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["Saved", "Applied", "Interview Scheduled", "Offer", "Completed"] },
+        "interviewAt": { "type": "string", "maxLength": 60 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "organizerId", "opportunityId", "opportunityTitle", "status", "createdAt", "updatedAt"]
+    },
+    "DirectMessage": {
+      "title": "DirectMessage",
+      "description": "End-to-end encrypted direct message between student and recruiter/organizer.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "threadId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recipientId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "ciphertext": { "type": "string", "minLength": 1, "maxLength": 8000 },
+        "iv": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "algorithm": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "threadId", "senderId", "recipientId", "senderName", "ciphertext", "iv", "algorithm", "createdAt"]
+    },
+    "EncryptedVaultDoc": {
+      "title": "EncryptedVaultDoc",
+      "description": "Client-side AES-GCM encrypted student credential document.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "docType": { "type": "string", "enum": ["Resume", "Transcript", "Offer Letter", "ID Verification", "Certificate"] },
+        "ciphertext": { "type": "string", "minLength": 1, "maxLength": 200000 },
+        "iv": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "sizeBytes": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "title", "docType", "ciphertext", "iv", "sizeBytes", "createdAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "Real-time notification or scheduled interview/goal reminder.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "title": { "type": "string", "maxLength": 140 },
+        "body": { "type": "string", "maxLength": 500 },
+        "channel": { "type": "string", "enum": ["push", "email", "in_app"] },
+        "read": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "title", "body", "channel", "read", "createdAt"]
+    },
+    "EngagementEvent": {
+      "title": "EngagementEvent",
+      "description": "Click, save, or registration feedback event used by the hybrid recommender.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "opportunityId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventType": { "type": "string", "enum": ["click", "save", "register", "share"] },
+        "domain": { "type": "string", "maxLength": 80 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "opportunityId", "eventType", "domain", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Private PII user account settings, strictly isolated to owner or admin."
+    },
+    "/publicProfiles/{profileId}": {
+      "schema": { "$ref": "#/entities/PublicProfile" },
+      "description": "Non-PII student and recruiter campus profiles."
+    },
+    "/opportunities/{opportunityId}": {
+      "schema": { "$ref": "#/entities/Opportunity" },
+      "description": "Campus, career, and community opportunities."
+    },
+    "/applications/{applicationId}": {
+      "schema": { "$ref": "#/entities/ApplicationRecord" },
+      "description": "Student saves, applications, and interview schedules."
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/DirectMessage" },
+      "description": "End-to-end encrypted direct messages."
+    },
+    "/vaultDocs/{docId}": {
+      "schema": { "$ref": "#/entities/EncryptedVaultDoc" },
+      "description": "AES-GCM encrypted student credential vault documents."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "Real-time notifications and scheduled reminders."
+    },
+    "/engagementEvents/{eventId}": {
+      "schema": { "$ref": "#/entities/EngagementEvent" },
+      "description": "Engagement telemetry feeding back into recommendation scoring."
+    }
+  }
+}

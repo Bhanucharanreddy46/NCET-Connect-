@@ -1,0 +1,341 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 1 / Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return isVerifiedUser() && (
+        request.auth.token.email == 'kmbhanucharanreddy@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isBoundedStringList(arr, maxLen) {
+      return arr is list && arr.size() <= maxLen && (arr.size() == 0 || arr[0] is string);
+    }
+
+    // Entity Validators
+    function isValidUserAccount(data) {
+      return data.keys().hasAll(['uid', 'email', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'role', 'biometricEnabled', 'emailDigestEnabled', 'pushRemindersEnabled', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.role in ['student', 'organizer']
+        && (!('biometricEnabled' in data) || data.biometricEnabled is bool)
+        && (!('emailDigestEnabled' in data) || data.emailDigestEnabled is bool)
+        && (!('pushRemindersEnabled' in data) || data.pushRemindersEnabled is bool)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublicProfile(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'department', 'year', 'skills', 'interests', 'availability', 'careerGoals', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'department', 'year', 'skills', 'interests', 'availability', 'careerGoals', 'bio', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100
+        && data.department is string && data.department.size() >= 2 && data.department.size() <= 60
+        && data.year is string && data.year.size() >= 1 && data.year.size() <= 30
+        && isBoundedStringList(data.skills, 25)
+        && isBoundedStringList(data.interests, 25)
+        && isBoundedStringList(data.availability, 10)
+        && isBoundedStringList(data.careerGoals, 10)
+        && (!('bio' in data) || (data.bio is string && data.bio.size() <= 500))
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOpportunity(data) {
+      return data.keys().hasAll(['id', 'organizerId', 'title', 'organization', 'type', 'domain', 'mode', 'departments', 'tags', 'deadline', 'sourceGroup', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'organizerId', 'title', 'organization', 'type', 'domain', 'industry', 'mode', 'departments', 'eligibleYears', 'tags', 'availabilitySlot', 'goalMatch', 'deadline', 'sourceGroup', 'sourceName', 'status', 'description', 'stipendOrPrize', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.organizerId)
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 160
+        && data.organization is string && data.organization.size() >= 2 && data.organization.size() <= 120
+        && data.type in ['Internship', 'Hackathon', 'Workshop', 'Meetup', 'Research', 'Campus Drive']
+        && data.domain is string && data.domain.size() >= 1 && data.domain.size() <= 80
+        && (!('industry' in data) || (data.industry is string && data.industry.size() <= 80))
+        && data.mode in ['Remote', 'Hybrid', 'On-Campus', 'Offline']
+        && isBoundedStringList(data.departments, 15)
+        && (!('eligibleYears' in data) || isBoundedStringList(data.eligibleYears, 6))
+        && isBoundedStringList(data.tags, 20)
+        && (!('availabilitySlot' in data) || (data.availabilitySlot is string && data.availabilitySlot.size() <= 60))
+        && (!('goalMatch' in data) || (data.goalMatch is string && data.goalMatch.size() <= 80))
+        && data.deadline is string && data.deadline.size() >= 4 && data.deadline.size() <= 40
+        && data.sourceGroup in ['Campus', 'Career', 'Community']
+        && (!('sourceName' in data) || (data.sourceName is string && data.sourceName.size() <= 60))
+        && data.status in ['published', 'pending_moderation', 'archived']
+        && (!('description' in data) || (data.description is string && data.description.size() <= 3000))
+        && (!('stipendOrPrize' in data) || (data.stipendOrPrize is string && data.stipendOrPrize.size() <= 80))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidApplication(data) {
+      return data.keys().hasAll(['id', 'studentId', 'organizerId', 'opportunityId', 'opportunityTitle', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'studentId', 'organizerId', 'opportunityId', 'opportunityTitle', 'organization', 'status', 'interviewAt', 'notes', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.studentId)
+        && isValidId(data.organizerId)
+        && isValidId(data.opportunityId)
+        && data.opportunityTitle is string && data.opportunityTitle.size() >= 1 && data.opportunityTitle.size() <= 160
+        && (!('organization' in data) || (data.organization is string && data.organization.size() <= 120))
+        && data.status in ['Saved', 'Applied', 'Interview Scheduled', 'Offer', 'Completed']
+        && (!('interviewAt' in data) || (data.interviewAt is string && data.interviewAt.size() <= 60))
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidMessage(data) {
+      return data.keys().hasAll(['id', 'threadId', 'senderId', 'recipientId', 'senderName', 'ciphertext', 'iv', 'algorithm', 'createdAt'])
+        && data.keys().hasOnly(['id', 'threadId', 'senderId', 'recipientId', 'senderName', 'ciphertext', 'iv', 'algorithm', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.threadId)
+        && isValidId(data.senderId)
+        && isValidId(data.recipientId)
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 100
+        && data.ciphertext is string && data.ciphertext.size() >= 1 && data.ciphertext.size() <= 8000
+        && data.iv is string && data.iv.size() >= 1 && data.iv.size() <= 120
+        && data.algorithm is string && data.algorithm.size() >= 1 && data.algorithm.size() <= 40
+        && data.createdAt is timestamp;
+    }
+
+    function isValidVaultDoc(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'title', 'docType', 'ciphertext', 'iv', 'sizeBytes', 'createdAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'title', 'docType', 'ciphertext', 'iv', 'sizeBytes', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.ownerId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.docType in ['Resume', 'Transcript', 'Offer Letter', 'ID Verification', 'Certificate']
+        && data.ciphertext is string && data.ciphertext.size() >= 1 && data.ciphertext.size() <= 200000
+        && data.iv is string && data.iv.size() >= 1 && data.iv.size() <= 120
+        && data.sizeBytes is int && data.sizeBytes >= 0 && data.sizeBytes <= 5242880
+        && data.createdAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['id', 'userId', 'title', 'body', 'channel', 'read', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'title', 'body', 'channel', 'read', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 140
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 500
+        && data.channel in ['push', 'email', 'in_app']
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    function isValidEngagementEvent(data) {
+      return data.keys().hasAll(['id', 'userId', 'opportunityId', 'eventType', 'domain', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'opportunityId', 'eventType', 'domain', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && isValidId(data.opportunityId)
+        && data.eventType in ['click', 'save', 'register', 'share']
+        && data.domain is string && data.domain.size() >= 1 && data.domain.size() <= 80
+        && data.createdAt is timestamp;
+    }
+
+    // Collection Rules
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && (isOwner(adminId) || isAdmin());
+      allow list, create, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserAccount(incoming())
+        && isOwner(userId)
+        && incoming().uid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserAccount(incoming())
+        && (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().uid == existing().uid
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly(['role', 'biometricEnabled', 'emailDigestEnabled', 'pushRemindersEnabled', 'updatedAt'])
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /publicProfiles/{profileId} {
+      allow get: if isValidId(profileId) && isSignedIn();
+      allow list: if isSignedIn() && resource.data.uid is string;
+      allow create: if isVerifiedUser()
+        && isValidId(profileId)
+        && isValidPublicProfile(incoming())
+        && isOwner(profileId)
+        && incoming().uid == request.auth.uid
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(profileId)
+        && isValidPublicProfile(incoming())
+        && (
+          isAdmin() ||
+          (
+            isOwner(profileId)
+            && incoming().uid == existing().uid
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'department', 'year', 'skills', 'interests', 'availability', 'careerGoals', 'bio', 'updatedAt'])
+          )
+        );
+      allow delete: if isAdmin();
+    }
+
+    match /opportunities/{opportunityId} {
+      allow get: if isValidId(opportunityId) && (existing().status == 'published' || isSignedIn());
+      allow list: if resource.data.status == 'published' || (isSignedIn() && (resource.data.organizerId == request.auth.uid || isAdmin()));
+      allow create: if isVerifiedUser()
+        && isValidId(opportunityId)
+        && isValidOpportunity(incoming())
+        && incoming().id == opportunityId
+        && incoming().organizerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(opportunityId)
+        && isValidOpportunity(incoming())
+        && (
+          isAdmin() ||
+          (
+            existing().organizerId == request.auth.uid
+            && incoming().id == existing().id
+            && incoming().organizerId == existing().organizerId
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'organization', 'type', 'domain', 'industry', 'mode', 'departments', 'eligibleYears', 'tags', 'availabilitySlot', 'goalMatch', 'deadline', 'description', 'stipendOrPrize', 'status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(opportunityId) && (isAdmin() || (isVerifiedUser() && existing().organizerId == request.auth.uid));
+    }
+
+    match /applications/{applicationId} {
+      allow get: if isValidId(applicationId) && isSignedIn() && (existing().studentId == request.auth.uid || existing().organizerId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.studentId == request.auth.uid || resource.data.organizerId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser()
+        && isValidId(applicationId)
+        && isValidApplication(incoming())
+        && incoming().id == applicationId
+        && incoming().studentId == request.auth.uid
+        && exists(/databases/$(database)/documents/opportunities/$(incoming().opportunityId))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(applicationId)
+        && isValidApplication(incoming())
+        && (
+          isAdmin() ||
+          (
+            existing().status != 'Completed'
+            && incoming().id == existing().id
+            && incoming().studentId == existing().studentId
+            && incoming().organizerId == existing().organizerId
+            && incoming().opportunityId == existing().opportunityId
+            && incoming().createdAt == existing().createdAt
+            && incoming().updatedAt == request.time
+            && (
+              (existing().studentId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'interviewAt', 'notes', 'updatedAt'])) ||
+              (existing().organizerId == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'interviewAt', 'updatedAt']))
+            )
+          )
+        );
+      allow delete: if isValidId(applicationId) && (isAdmin() || (isVerifiedUser() && existing().studentId == request.auth.uid));
+    }
+
+    match /messages/{messageId} {
+      allow get: if isValidId(messageId) && isSignedIn() && (existing().senderId == request.auth.uid || existing().recipientId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.senderId == request.auth.uid || resource.data.recipientId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser()
+        && isValidId(messageId)
+        && isValidMessage(incoming())
+        && incoming().id == messageId
+        && incoming().senderId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(messageId) && (isAdmin() || (isVerifiedUser() && existing().senderId == request.auth.uid));
+    }
+
+    match /vaultDocs/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && existing().ownerId == request.auth.uid;
+      allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+      allow create: if isVerifiedUser()
+        && isValidId(docId)
+        && isValidVaultDoc(incoming())
+        && incoming().id == docId
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(docId) && isVerifiedUser() && existing().ownerId == request.auth.uid;
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser()
+        && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && incoming().id == notificationId
+        && (incoming().userId == request.auth.uid || isAdmin())
+        && incoming().createdAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(notificationId)
+        && isValidNotification(incoming())
+        && existing().userId == request.auth.uid
+        && incoming().id == existing().id
+        && incoming().userId == existing().userId
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isValidId(notificationId) && isVerifiedUser() && existing().userId == request.auth.uid;
+    }
+
+    match /engagementEvents/{eventId} {
+      allow get: if isValidId(eventId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isVerifiedUser()
+        && isValidId(eventId)
+        && isValidEngagementEvent(incoming())
+        && incoming().id == eventId
+        && incoming().userId == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(eventId) && isAdmin();
+    }
+  }
+}
